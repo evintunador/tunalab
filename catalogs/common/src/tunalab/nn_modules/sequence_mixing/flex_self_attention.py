@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn.attention.flex_attention import BlockMask, flex_attention, create_block_mask
 
-from tunalab.nn_modules.validation import ModuleTestConfig, BenchmarkConfig, Competitor, ignore_if_no_cuda
+from tunalab.validation.nn_modules import ModuleTestConfig, BenchmarkConfig, Competitor, ignore_if_no_cuda
 from tunalab.nn_modules.channel_mixing.fp8_linear import FP8Linear, is_hopper_available
 from tunalab.nn_modules.norms.rms_norm import RMSNorm
 

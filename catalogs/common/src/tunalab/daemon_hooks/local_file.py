@@ -3,16 +3,16 @@ import datetime
 import logging
 import json
 
-from tunalab.daemon_hooks.base import BaseDaemonHook
-
 
 logger = logging.getLogger(__name__)
 
 
-class FileDaemonHook(BaseDaemonHook):
+class FileDaemonHook:
     """
     A daemon hook that creates a watch file on run start and deletes it on run end.
     An external daemon can monitor the watch directory for these files.
+    
+    Implements the DaemonHook protocol from tunalab.protocols.
     """
 
     def __init__(self, watch_dir: str, run_artifacts_dir: str):

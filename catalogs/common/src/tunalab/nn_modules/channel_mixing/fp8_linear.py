@@ -4,7 +4,7 @@ import torch
 from torch import Tensor, nn
 import torch.nn.functional as F
 
-from tunalab.nn_modules.validation import ModuleTestConfig, BenchmarkConfig, Competitor
+from tunalab.validation.nn_modules import ModuleTestConfig, BenchmarkConfig, Competitor
 
 
 torch.set_float32_matmul_precision('medium')

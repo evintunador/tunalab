@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "tunalab-common"
 version = "0.1.0"
 dependencies = [
-    "tunalab-core",  # Depends on main package
+    "tunalab",  # Depends on main package
     "triton; sys_platform != 'darwin'",  # Skip triton on macOS
 ]
 

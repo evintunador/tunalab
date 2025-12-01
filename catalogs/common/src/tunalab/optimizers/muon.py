@@ -3,7 +3,7 @@ from typing import Type, Tuple
 import torch
 import torch.distributed as dist
 
-from tunalab.optimizers.catalog_utils import OptimizerConfig, OptimizerBenchmarkConfig
+from tunalab.validation.optimizers import OptimizerConfig, OptimizerBenchmarkConfig
 
 
 def zeropower_via_newtonschulz5(G, steps: int):

@@ -10,9 +10,9 @@ import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 
-from tunalab.nn_modules.validation import ModuleTestConfig, get_total_loss
+from tunalab.validation.nn_modules import ModuleTestConfig, get_total_loss
 from tunalab.device import get_available_devices, to_device, to_dtype
-from tunalab.validation import discover_dunder_objects_in_package, list_all_files_in_folder_and_subdirs, import_module_from_path
+from tunalab.validation.discovery import discover_dunder_objects_in_package, list_all_files_in_folder_and_subdirs, import_module_from_path
 from tunalab.paths import get_repo_root
 
 

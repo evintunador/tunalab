@@ -4,7 +4,7 @@ import math
 import torch
 import torch.nn as nn
 
-from tunalab.nn_modules.validation import (
+from tunalab.validation.nn_modules import (
     ModuleTestConfig, 
     BenchmarkConfig, 
     Competitor,

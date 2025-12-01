@@ -5,20 +5,21 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tunalab"
 version = "0.1.0"
+description = "Composable ML experiment infrastructure"
 dependencies = [
-    "tunalab-core",
-    "tunalab-validation",
-    "tunalab-llm-compilation"
+    "torch",
+    "numpy",
+    "pyyaml",
+    "tqdm",
 ]
 
-[tool.setuptools]
-# Tell setuptools there are no packages to discover in the root
-packages = []
+[project.optional-dependencies]
+llm = ["litellm"]
+dev = ["pytest", "matplotlib"]
+all = ["tunalab[llm,dev]"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
-testpaths = [
-    "packages/tunalab-core/tests",
-    "packages/tunalab-validation/tests", 
-    "packages/tunalab-llm-compilation/tests",
-    "tests/",
-]
+testpaths = ["tests/"]

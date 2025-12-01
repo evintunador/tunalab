@@ -1,6 +1,6 @@
 from torch.optim import AdamW
 
-from tunalab.optimizers.catalog_utils import OptimizerConfig, OptimizerBenchmarkConfig
+from tunalab.validation.optimizers import OptimizerConfig, OptimizerBenchmarkConfig
 
 
 __test_config__ = OptimizerConfig(

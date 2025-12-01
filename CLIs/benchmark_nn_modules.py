@@ -10,9 +10,9 @@ from tqdm import tqdm
 import torch
 import pandas as pd
 
-from tunalab.nn_modules.validation import BenchmarkConfig, get_total_loss
+from tunalab.validation.nn_modules import BenchmarkConfig, get_total_loss
 from tunalab.device import get_available_devices, to_device, to_dtype
-from tunalab.validation import discover_dunder_objects_in_package
+from tunalab.validation.discovery import discover_dunder_objects_in_package
 from tunalab.paths import get_artifact_root
 
 

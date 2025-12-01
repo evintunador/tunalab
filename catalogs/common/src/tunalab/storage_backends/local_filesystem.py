@@ -3,14 +3,16 @@ import shutil
 from typing import Optional
 import logging
 
-from tunalab.backup_storage_backends.base import BaseBackupStorageBackend
-
 
 logger = logging.getLogger(__name__)
 
 
-class LocalFileSystemBackend(BaseBackupStorageBackend):
-    """A backend that saves artifacts to another local directory."""
+class LocalFileSystemBackend:
+    """
+    A backend that saves artifacts to another local directory.
+    
+    Implements the StorageBackend protocol from tunalab.protocols.
+    """
     def __init__(
         self, 
         remote_dir: str,

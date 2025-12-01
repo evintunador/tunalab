@@ -9,7 +9,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from tunalab.train_loops.device import run_training
-from tunalab.train_loops.compiler_validation import SimpleTestTrainingModel, AVAILABLE_DEVICES
+from tunalab.validation.train_loops import SimpleTestTrainingModel, AVAILABLE_DEVICES
 
 
 # AVAILABLE_DEVICES doesn't include 'cpu' funnily enough

@@ -8,7 +8,7 @@ from importlib import reload
 
 import tunalab.checkpointer as checkpointer
 
-from tunalab.train_loops.compiler_validation import SimpleTestTrainingModel, AVAILABLE_DEVICES
+from tunalab.validation.train_loops import SimpleTestTrainingModel, AVAILABLE_DEVICES
 
 
 @pytest.mark.parametrize("device", AVAILABLE_DEVICES)

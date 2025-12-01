@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
 
-from tunalab.nn_modules.validation import ModuleTestConfig, BenchmarkConfig, Competitor
+from tunalab.validation.nn_modules import ModuleTestConfig, BenchmarkConfig, Competitor
 
 
 class RMSNorm(nn.Module):

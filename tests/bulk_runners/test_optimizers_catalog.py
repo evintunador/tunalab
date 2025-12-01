@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader, TensorDataset
 import pytest
 
 from tunalab.device import get_default_device
-from tunalab.optimizers.catalog_utils import OptimizerConfig, create_smart_optimizer
+from tunalab.validation.optimizers import OptimizerConfig, create_smart_optimizer
 
 
 device = get_default_device()

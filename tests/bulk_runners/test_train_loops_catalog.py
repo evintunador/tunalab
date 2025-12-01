@@ -9,9 +9,9 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset, IterableDataset
 import pytest
 
-from tunalab.validation import import_module_from_path
+from tunalab.validation.discovery import import_module_from_path
 from tunalab.paths import get_artifact_root
-from tunalab.train_loops.compiler_validation import (
+from tunalab.validation.train_loops import (
     universal_learning_test,
     discover_specific_tests,
     base_loop_compliance_test,

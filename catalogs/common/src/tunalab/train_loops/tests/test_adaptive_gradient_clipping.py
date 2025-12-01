@@ -8,7 +8,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from tunalab.train_loops.adaptive_gradient_clipping import run_training
-from tunalab.train_loops.compiler_validation import SimpleTestTrainingModel, AVAILABLE_DEVICES
+from tunalab.validation.train_loops import SimpleTestTrainingModel, AVAILABLE_DEVICES
 
 
 @pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in AVAILABLE_DEVICES])

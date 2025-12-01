@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-from tunalab.nn_modules.validation import ModuleTestConfig, BenchmarkConfig, Competitor
+from tunalab.validation.nn_modules import ModuleTestConfig, BenchmarkConfig, Competitor
 
 
 class CausalSelfAttention(nn.Module):
