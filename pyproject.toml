@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tunalab"
+version = "0.1.0"
+dependencies = [
+    "tunalab-core",
+    "tunalab-validation",
+    "tunalab-llm-compilation"
+]
+
+[tool.setuptools]
+# Tell setuptools there are no packages to discover in the root
+packages = []
+
+[tool.pytest.ini_options]
+testpaths = [
+    "packages/tunalab-core/tests",
+    "packages/tunalab-validation/tests", 
+    "packages/tunalab-llm-compilation/tests",
+    "tests/",
+]
