@@ -8,10 +8,10 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from tunalab.train_loops.adaptive_gradient_clipping import run_training
-from tunalab.validation.train_loops import SimpleTestTrainingModel, AVAILABLE_DEVICES
+from tunalab.testing import SimpleTestTrainingModel, get_available_devices
 
 
-@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in AVAILABLE_DEVICES])
+@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in get_available_devices()])
 def test_adaptive_gradient_clipping_applied(run_training_fn, device):
     """Test that adaptive gradient clipping affects training when gradients are large."""
     torch.manual_seed(42)

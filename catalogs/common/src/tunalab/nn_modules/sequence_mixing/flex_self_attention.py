@@ -7,12 +7,8 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.nn.attention.flex_attention import BlockMask, flex_attention, create_block_mask
 
-from tunalab.validation.nn_modules import ModuleTestConfig, BenchmarkConfig, Competitor, ignore_if_no_cuda
 from tunalab.nn_modules.channel_mixing.fp8_linear import FP8Linear, is_hopper_available
 from tunalab.nn_modules.norms.rms_norm import RMSNorm
-
-
-ignore_if_no_cuda()
 
 class HalfTruncatedRotary(nn.Module):
     """half-truncate RoPE by @YouJiacheng (w/ base freq tuning)"""
@@ -83,96 +79,3 @@ class FlexSelfAttention(nn.Module):
         y = y.contiguous().view(B, T, self.num_heads * self.head_dim) # re-assemble all head outputs side by side
         y = self.Wout(y)
         return y
-
-
-##################################################
-#################### TESTING ####################
-##################################################
-
-
-def causal(b, h, q_idx, kv_idx):
-    return q_idx >= kv_idx
-
-block_mask = lambda seq: create_block_mask(causal, B=None, H=None, Q_LEN=seq, KV_LEN=seq)
-
-
-def output_validator(
-        module: nn.Module,
-        inputs: Tuple[Any],
-        outputs: Tuple[Any],
-) -> None:
-    """
-    Validates whether the base module output meets expectations.
-    Testing framework always passes in tuples even if there's only one input/output tensor
-    """
-    input_tensor = inputs[0] 
-    #block_mask = inputs[1]
-    output_tensor = outputs[0]
-    assert output_tensor.shape == input_tensor.shape, f"Expected output shape {input_tensor.shape}, but got {output_tensor.shape}"
-    assert output_tensor.dtype == input_tensor.dtype
-    
-
-__competitors__ = {
-    'FlexSelfAttention': Competitor(module_class=FlexSelfAttention),
-}
-
-
-fsa_dims_to_test = [256]
-fsa_num_heads_to_test = [4]
-fsa_seq_lens_to_test = [512, 2048]
-
-
-__test_config__ = ModuleTestConfig(
-    competitors=__competitors__,
-    reference_competitor='FlexSelfAttention',
-    test_cases=[
-        {
-            'init_args': {
-                'dim': dim, 
-                'num_heads': num_heads, 
-                'max_seq_len': max_seq_len, 
-                'fp8_out_proj': fp8_out_proj, 
-            },
-            'input_args': (
-                torch.randn(1, max_seq_len, dim, requires_grad=True), # x
-                block_mask(max_seq_len),
-            ),
-            'output_validator': output_validator,
-            'tolerances_fn': lambda x: {'atol': 1e-2, 'rtol': 1e-2}, # Optional
-            'case_descriptor': f'dim={dim}_num_heads={num_heads}_max_seq_len={max_seq_len}_fp8_out_proj={fp8_out_proj}',
-        }
-        for dim in fsa_dims_to_test
-        for num_heads in fsa_num_heads_to_test
-        for max_seq_len in fsa_seq_lens_to_test
-        for fp8_out_proj in ([True, False] if is_hopper_available() else [False])
-    ]
-)
-
-
-##################################################
-################# BENCHMARKING ###################
-##################################################
-
-
-def benchmark_input_provider(init_args: dict) -> tuple:
-    return (
-        torch.randn(1, init_args['max_seq_len'], init_args['dim'], requires_grad=True),
-        block_mask(init_args['max_seq_len'])
-    )
-
-
-__benchmark_config__ = BenchmarkConfig(
-    module_name='FlexSelfAttention',
-    competitors=__competitors__,
-    parameter_space={
-        'dim': [256, 512, 1024, 2048],
-        'max_seq_len': [1024, 4096, 16_384],
-        'num_heads': [4],
-    },
-    init_arg_builder=lambda params: {
-        'dim': params['dim'],
-        'max_seq_len': params['max_seq_len'],
-        'num_heads': params['num_heads'],
-    },
-    input_provider=benchmark_input_provider,
-)

@@ -6,10 +6,10 @@ from torch.utils.data import DataLoader, TensorDataset
 from unittest.mock import patch, call, MagicMock
 from importlib import reload
 
-from tunalab.validation.train_loops import SimpleTestTrainingModel, AVAILABLE_DEVICES
+from tunalab.testing import SimpleTestTrainingModel, get_available_devices
 
 
-@pytest.mark.parametrize("device", AVAILABLE_DEVICES)
+@pytest.mark.parametrize("device", get_available_devices())
 def test_checkpointing_over_epochs(device, tmp_path, monkeypatch):
     """Test that checkpointing is triggered correctly every N epochs."""
     torch.manual_seed(0)

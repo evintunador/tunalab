@@ -6,12 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "tunalab-nlp"
 version = "0.1.0"
 dependencies = [
-    "tunalab-core",
+    "tunalab",
     "tunalab-common",
     "datasets",
     "tiktoken",
 ]
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["tunalab", "tunalab.*"]
+where = ["src"]
+include = ["tunalab*"]

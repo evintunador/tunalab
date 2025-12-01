@@ -6,21 +6,34 @@ import sys
 import traceback
 import inspect
 import logging
+import importlib.util
 from pathlib import Path
 from typing import Dict, Set, List, Tuple, Any, Optional, Callable
 from collections import defaultdict
 import tempfile
+import warnings
 
-from tunalab.validation.train_loops import (
-    universal_learning_test, discover_specific_tests, base_loop_compliance_test, dataset_type_compatibility_test
+from tunalab.testing import (
+    run_training_smoke_test as universal_learning_test,
+    run_base_loop_compliance_test,
 )
 from tunalab.protocols import LLMClient
 from tunalab.device import get_default_device
-from tunalab.validation.discovery import import_module_from_path
 from tunalab.paths import get_artifact_root
 
 # Get a logger for this module
 logger = logging.getLogger(__name__)
+
+
+def import_module_from_path(module_name: str, file_path):
+    """Import a Python module from a file path."""
+    spec = importlib.util.spec_from_file_location(module_name, str(file_path))
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load module from {file_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 SYSTEM_PROMPT = \
@@ -225,6 +238,38 @@ def _read_atomic_examples_text(paths: List[Path], char_budget: int = 100_000) ->
     return "\n".join(chunks)
 
 
+def discover_specific_tests() -> Dict[str, List[Callable]]:
+    """
+    Discover specific tests for atomic features.
+    
+    Note: This is a simplified version that looks for test files in the
+    train_loops package. For full test discovery, use pytest directly.
+    """
+    specific_tests: Dict[str, List[Callable]] = {}
+    
+    try:
+        import tunalab.train_loops
+        for root_str in tunalab.train_loops.__path__:
+            train_loops_dir = Path(root_str)
+            if not train_loops_dir.is_dir():
+                continue
+            
+            # Look for test files
+            for test_file in train_loops_dir.glob("test_*.py"):
+                feature_name = test_file.stem[5:]  # Remove 'test_' prefix
+                
+                try:
+                    module = import_module_from_path(f"test_{feature_name}", test_file)
+                    if hasattr(module, "__specific_tests__"):
+                        specific_tests[feature_name] = module.__specific_tests__
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    
+    return specific_tests
+
+
 def _extract_test_descriptions(atomic_features: List[str]) -> str:
     """Extract test descriptions from specific test functions for the given atomic features."""
     specific_tests = discover_specific_tests()
@@ -357,12 +402,79 @@ def run_specific_tests_for_compilation(run_training_fn: Callable, atomic_feature
                 test_func(run_training_fn, device)
 
 
+def dataset_type_compatibility_test(run_training_fn: Callable, device: str):
+    """
+    Test that a training loop works with both map-style and iterable-style datasets.
+    
+    This is a simplified inline version for compilation testing.
+    """
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import DataLoader, TensorDataset, IterableDataset
+    from tunalab.testing import SimpleTestTrainingModel
+    
+    class SimpleIterableDataset(IterableDataset):
+        def __init__(self, X, y, batch_size):
+            super().__init__()
+            self.X = X
+            self.y = y
+            self.batch_size = batch_size
+            self.num_samples = X.shape[0]
+        
+        def __iter__(self):
+            for i in range(0, self.num_samples, self.batch_size):
+                end = min(i + self.batch_size, self.num_samples)
+                yield self.X[i:end], self.y[i:end]
+    
+    batch_size = 64
+    torch.manual_seed(0)
+    X = torch.randn(2048, 32).to(device)
+    y = (X.sum(dim=1) > 0).long().to(device)
+    
+    # Test with map-style dataset
+    torch.manual_seed(1)
+    backbone_map = nn.Sequential(nn.Linear(32, 64), nn.ReLU(), nn.Linear(64, 2))
+    model_map = SimpleTestTrainingModel(backbone_map, nn.CrossEntropyLoss()).to(device)
+    optim_map = torch.optim.AdamW(model_map.parameters(), lr=3e-3)
+    
+    map_dataset = TensorDataset(X, y)
+    map_loader = DataLoader(map_dataset, batch_size=batch_size, shuffle=True)
+    
+    with torch.no_grad():
+        pre_loss = model_map((X, y)).item()
+    
+    run_training_fn(model=model_map, optimizer=optim_map, train_loader=map_loader)
+    
+    with torch.no_grad():
+        post_loss = model_map((X, y)).item()
+    
+    if not (post_loss < pre_loss * 0.9):
+        raise AssertionError(f"Map-style dataset test failed: pre={pre_loss:.4f}, post={post_loss:.4f}")
+    
+    # Test with iterable-style dataset
+    torch.manual_seed(1)
+    backbone_iter = nn.Sequential(nn.Linear(32, 64), nn.ReLU(), nn.Linear(64, 2))
+    model_iter = SimpleTestTrainingModel(backbone_iter, nn.CrossEntropyLoss()).to(device)
+    optim_iter = torch.optim.AdamW(model_iter.parameters(), lr=3e-3)
+    
+    iterable_dataset = SimpleIterableDataset(X, y, batch_size=batch_size)
+    iterable_loader = DataLoader(iterable_dataset, batch_size=None)
+    
+    with torch.no_grad():
+        pre_loss = model_iter((X, y)).item()
+    
+    run_training_fn(model=model_iter, optimizer=optim_iter, train_loader=iterable_loader)
+    
+    with torch.no_grad():
+        post_loss = model_iter((X, y)).item()
+    
+    if not (post_loss < pre_loss * 0.9):
+        raise AssertionError(f"Iterable-style dataset test failed: pre={pre_loss:.4f}, post={post_loss:.4f}")
+
+
 def run_base_loop_compliance_test_for_compilation(run_training_fn: Callable, atomic_features: List[str], device: str):
     """Run base_loop compliance test during compilation."""
-    
-    # For compiled loops, we use a representative name from the atomic features
-    feature_name = f"compiled_loop_{'-'.join(sorted([f.replace('.py', '') for f in atomic_features]))}"
-    base_loop_compliance_test(run_training_fn, feature_name, device)
+    run_base_loop_compliance_test(run_training_fn, device)
 
 
 def compile_loop(
@@ -413,7 +525,9 @@ def compile_loop(
         logger.debug("-" * 40)
         logger.debug(f"Found existing file at {code_path}")
         try:
-            module = import_module_from_path(f"cached_loop", code_path)
+            import hashlib
+            cache_key = hashlib.md5(str(code_path).encode()).hexdigest()[:8]
+            module = import_module_from_path(f"cached_loop_{cache_key}", code_path)
             logger.debug("✓ Successfully loaded cached loop")
             logger.info(f"Using cached compiled loop at {code_path}")
             return {
@@ -473,7 +587,7 @@ def compile_loop(
             # Import test
             logger.debug("Testing import...")
             try:
-                module = import_module_from_path(f"compiled_loop", code_path)
+                module = import_module_from_path(f"compiled_loop_{attempt_num}", code_path)
                 logger.debug("✓ Import successful")
             except Exception:
                 err = _summarize_exception_filtered([str(code_path)], phase="[import]")
@@ -561,7 +675,7 @@ def compile_loop(
                     # Test refined code
                     logger.debug("Testing refined code...")
                     try:
-                        module = import_module_from_path(f"compiled_loop", code_path)
+                        module = import_module_from_path(f"compiled_loop_refine_{refine_attempt}", code_path)
                         logger.debug("✓ Import successful")
                     except Exception:
                         err = _summarize_exception_filtered([str(code_path)], phase="[import]")
@@ -1047,7 +1161,10 @@ def smart_train(
                     break
             if feature_path is None:
                 raise FileNotFoundError(f"Atomic feature '{feature_name}' not found in active roots")
-            atomic_module = import_module_from_path(f"direct_{feature_name}", feature_path)
+            
+            import hashlib
+            path_hash = hashlib.md5(str(feature_path).encode()).hexdigest()[:8]
+            atomic_module = import_module_from_path(f"direct_{feature_name}_{path_hash}", feature_path)
             atomic_run_training = atomic_module.run_training
             
         except Exception as e:
@@ -1078,7 +1195,10 @@ def smart_train(
     compiled_module_path = compilation_result["code_path"]
 
     # Load the compiled training function
-    compiled_module = import_module_from_path("smart_compiled_loop", compiled_module_path)
+    import hashlib
+    import time
+    path_hash = hashlib.md5(f"{compiled_module_path}_{time.time()}".encode()).hexdigest()[:8]
+    compiled_module = import_module_from_path(f"smart_compiled_loop_{path_hash}", compiled_module_path)
     compiled_run_training = compiled_module.run_training
 
     logger.info(f"Using compiled training loop: {compiled_module_path}")

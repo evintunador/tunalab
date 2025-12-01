@@ -12,8 +12,10 @@ import pytest
 from unittest.mock import MagicMock
 from importlib import reload
 
-from tunalab.validation.train_loops import SimpleTestTrainingModel, AVAILABLE_DEVICES
+from tunalab.testing import SimpleTestTrainingModel, get_available_devices
 from tunalab.smart_train import smart_train
+
+AVAILABLE_DEVICES = get_available_devices()
 
 
 # Helper function to create test data

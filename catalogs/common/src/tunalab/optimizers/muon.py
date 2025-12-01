@@ -3,8 +3,6 @@ from typing import Type, Tuple
 import torch
 import torch.distributed as dist
 
-from tunalab.validation.optimizers import OptimizerConfig, OptimizerBenchmarkConfig
-
 
 def zeropower_via_newtonschulz5(G, steps: int):
     """
@@ -332,32 +330,3 @@ class MuonTestAdapter:
                 super().__init__(param_groups)
         
         return MuonAdapter(*args, **kwargs)
-
-
-__test_config__ = OptimizerConfig(
-    optimizer_kwargs={
-        'muon_lr': 0.02,
-        'adamw_lr': 3e-4,
-        'adamw_betas': (0.9, 0.95),
-        'momentum': 0.95, 
-        'nesterov': True,
-        'ns_steps': 5,
-        'weight_decay': 0.01,
-    },
-)
-
-
-__benchmark_config__ = OptimizerBenchmarkConfig(
-    optimizer_name = 'Muon',
-    competitors = {'Muon': {'class': MuonTestAdapter}},
-    parameter_space = {
-        'muon_lr': [1e-1, 1e-2, 1e-3, 1e-4],
-        'momentum': [0.9, 0.99, 0.999],
-        'ns_steps': [3, 5, 7]
-    },
-    optimizer_kwargs_builder = lambda params: {
-        'lr': params['lr'],
-        'momentum': params['momentum'],
-        'ns_steps': params['ns_steps']
-    },
-)

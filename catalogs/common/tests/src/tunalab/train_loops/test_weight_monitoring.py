@@ -9,10 +9,10 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from tunalab.train_loops.weight_monitoring import run_training
-from tunalab.validation.train_loops import SimpleTestTrainingModel, AVAILABLE_DEVICES
+from tunalab.testing import SimpleTestTrainingModel, get_available_devices
 
 
-@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in AVAILABLE_DEVICES])
+@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in get_available_devices()])
 def test_weight_norm_monitoring(run_training_fn, device):
     """Test that weight norm monitoring works and returns history."""
     torch.manual_seed(42)
@@ -50,7 +50,7 @@ def test_weight_norm_monitoring(run_training_fn, device):
         assert not torch.isnan(torch.tensor(norm_val)), "Weight norm values must not be NaN"
 
 
-@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in AVAILABLE_DEVICES])
+@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in get_available_devices()])
 def test_weight_change_monitoring(run_training_fn, device):
     """Test that weight change monitoring works and returns history."""
     torch.manual_seed(42)
@@ -88,7 +88,7 @@ def test_weight_change_monitoring(run_training_fn, device):
         assert not torch.isnan(torch.tensor(change_val)), "Weight change values must not be NaN"
 
 
-@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in AVAILABLE_DEVICES])
+@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in get_available_devices()])
 def test_weight_monitoring_log_interval(run_training_fn, device):
     """Test that weight_log_interval parameter controls monitoring frequency."""
     torch.manual_seed(42)

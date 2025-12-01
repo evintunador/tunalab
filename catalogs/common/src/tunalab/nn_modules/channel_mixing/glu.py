@@ -3,24 +3,13 @@ from typing import Union, Tuple, Any
 import torch
 import torch.nn as nn
 
-from tunalab.validation.nn_modules import (
-    ModuleTestConfig, 
-    BenchmarkConfig, 
-    Competitor,
-    next_multiple,
-)
 from tunalab.nn_modules.activations.relu2 import ReLU2
-from .fp8_linear import FP8Linear, is_hopper_available
-from .mlp import (
-    input_args, 
-    tolerances_fn, 
-    dims_to_test, 
-    act_to_test,
-    output_validator,
-    dims_to_bench,
-    hidden_mult_to_bench,
-    benchmark_input_provider,
-)
+from .fp8_linear import FP8Linear
+
+
+def next_multiple(x, n):
+    """Round x up to the next multiple of n."""
+    return int(((int(x) + n - 1) // n) * n)
 
 
 torch.set_float32_matmul_precision('medium')
@@ -80,66 +69,3 @@ class PreCompiledGLU(GLU):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return pre_compiled_fwd(x, self.Wup_gate, self.Wdown, self.act_fn, self.dropout)
     
-
-def pre_compiled_run_filter(inputs: Union[torch.Tensor, Tuple[Any]]) -> bool:
-    """
-    Many custom modules are only appropriate for use under a subset of all the conditions where a regular pytorch nn.module can run.
-    Use this function to ensure that testing is only attempted on that subset.
-    Here, for example, our PreCompiledGLU should only be run on a GPU since it uses torch.compile.
-    """
-    if 'cpu' in str(inputs[0].device):
-        return False
-    return True
-
-
-##################################################
-#################### TESTING ####################
-##################################################
-
-
-__competitors__ = {
-    'GLU': Competitor(module_class=GLU),
-    'PreCompiledGLU': Competitor(module_class=PreCompiledGLU, run_filter=pre_compiled_run_filter),
-}
-
-
-__test_config__ = ModuleTestConfig(
-    competitors=__competitors__,
-    reference_competitor='GLU',
-    test_cases=[
-        {
-            'init_args': {'in_dim': dim, 'activation': act, 'fp8': fp8},
-            'input_args': input_args(dim=dim), 
-            'output_validator': output_validator,
-            'tolerances_fn': tolerances_fn,                  # Optional
-            'case_descriptor': f'dim={dim}_act={act}_fp8={fp8}',
-        }
-        for dim in dims_to_test
-        for act in act_to_test
-        for fp8 in ([True, False] if is_hopper_available() else [False])
-    ]
-)
-
-
-##################################################
-################# BENCHMARKING ###################
-##################################################
-
-
-__benchmark_config__ = BenchmarkConfig(
-    module_name='GLU',
-    competitors=__competitors__,
-    parameter_space={
-        'dim': dims_to_bench,
-        'hidden_mult': hidden_mult_to_bench,
-        'activation': act_to_test,
-        'fp8': ([True, False] if is_hopper_available() else [False]),
-    },
-    init_arg_builder=lambda params: {
-        'in_dim': params['dim'],
-        'hidden_dim': int(params['dim'] * params['hidden_mult'] * 2/3),
-        'activation': params['activation'],
-        'fp8': params['fp8']
-    },
-    input_provider=benchmark_input_provider,
-)

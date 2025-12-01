@@ -11,10 +11,10 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from tunalab.train_loops.early_stopping import run_training
-from tunalab.validation.train_loops import SimpleTestTrainingModel, AVAILABLE_DEVICES
+from tunalab.testing import SimpleTestTrainingModel, get_available_devices
 
 
-@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in AVAILABLE_DEVICES])
+@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in get_available_devices()])
 def test_early_stopping_without_val_loader(run_training_fn, device):
     """Test that training works normally when no validation loader is provided."""
     torch.manual_seed(42)
@@ -54,7 +54,7 @@ def test_early_stopping_without_val_loader(run_training_fn, device):
         "Model parameters should have changed during training"
 
 
-@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in AVAILABLE_DEVICES])
+@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in get_available_devices()])
 def test_early_stopping_with_val_loader(run_training_fn, device):
     """Test that early stopping can handle validation loader and parameters."""
     torch.manual_seed(42)
@@ -100,7 +100,7 @@ def test_early_stopping_with_val_loader(run_training_fn, device):
         "Model parameters should have changed during training"
 
 
-@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in AVAILABLE_DEVICES])
+@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in get_available_devices()])
 def test_early_stopping_parameter_handling(run_training_fn, device):
     """Test that different early stopping parameters are accepted without errors."""
     torch.manual_seed(42)

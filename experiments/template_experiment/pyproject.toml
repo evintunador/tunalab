@@ -6,8 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "template-experiment"
 version = "0.1.0"
 dependencies = [
-    "tunalab-core", 
-    "tunalab-validation", 
+    "tunalab-core",  # Includes tunalab.testing
     "tunalab-llm-compilation", 
     "tunalab-catalogs-common",
     "tunalab-catalogs-nlp",

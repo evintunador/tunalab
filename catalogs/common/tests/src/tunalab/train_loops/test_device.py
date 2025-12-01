@@ -9,11 +9,11 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from tunalab.train_loops.device import run_training
-from tunalab.validation.train_loops import SimpleTestTrainingModel, AVAILABLE_DEVICES
+from tunalab.testing import SimpleTestTrainingModel, get_available_devices
 
 
-# AVAILABLE_DEVICES doesn't include 'cpu' funnily enough
-@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in AVAILABLE_DEVICES + ['cpu']])
+# get_available_devices doesn't include 'cpu' funnily enough
+@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in get_available_devices() + ['cpu']])
 def test_device_placement_correction(run_training_fn, device):
     """
     Tests that the training loop moves a model and data from a mismatched
@@ -24,7 +24,7 @@ def test_device_placement_correction(run_training_fn, device):
     # Smarter mismatch logic to avoid the 'meta' device issue.
     if target_device == "cpu":
         # Find another available device to use as the mismatch source.
-        other_devices = [d for d in AVAILABLE_DEVICES if d != "cpu"]
+        other_devices = [d for d in get_available_devices() if d != "cpu"]
         if not other_devices:
             pytest.skip("Cannot test CPU placement without another device to mismatch from.")
         mismatch_device = other_devices[0]

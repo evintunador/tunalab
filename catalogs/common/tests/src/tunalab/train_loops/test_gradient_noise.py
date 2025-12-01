@@ -9,10 +9,10 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from tunalab.train_loops.gradient_noise import run_training
-from tunalab.validation.train_loops import SimpleTestTrainingModel, AVAILABLE_DEVICES
+from tunalab.testing import SimpleTestTrainingModel, get_available_devices
 
 
-@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in AVAILABLE_DEVICES])
+@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in get_available_devices()])
 def test_gradient_noise_adds_randomness(run_training_fn, device):
     """Test that gradient noise makes training non-deterministic."""
     torch.manual_seed(42)

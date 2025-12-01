@@ -9,10 +9,10 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from tunalab.train_loops.validation import run_training
-from tunalab.validation.train_loops import SimpleTestTrainingModel, AVAILABLE_DEVICES
+from tunalab.testing import SimpleTestTrainingModel, get_available_devices
 
 
-@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in AVAILABLE_DEVICES])
+@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in get_available_devices()])
 def test_validation_with_loader(run_training_fn, device):
     """Test that validation is performed and val_loss_history is returned when val_loader is provided."""
     torch.manual_seed(42)
@@ -56,7 +56,7 @@ def test_validation_with_loader(run_training_fn, device):
         assert not torch.isnan(torch.tensor(loss_val)), "Validation loss values must not be NaN"
 
 
-@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in AVAILABLE_DEVICES])
+@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in get_available_devices()])
 def test_validation_without_loader(run_training_fn, device):
     """Test that no val_loss_history is returned when val_loader is not provided."""
     torch.manual_seed(42)
@@ -86,7 +86,7 @@ def test_validation_without_loader(run_training_fn, device):
     assert "val_loss_history" not in result, "Result should not contain 'val_loss_history' when val_loader is None"
 
 
-@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in AVAILABLE_DEVICES])
+@pytest.mark.parametrize("run_training_fn,device", [(run_training, device) for device in get_available_devices()])
 def test_validation_interval(run_training_fn, device):
     """Test that val_interval parameter controls validation frequency."""
     torch.manual_seed(42)

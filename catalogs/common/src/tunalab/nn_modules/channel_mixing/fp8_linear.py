@@ -4,8 +4,6 @@ import torch
 from torch import Tensor, nn
 import torch.nn.functional as F
 
-from tunalab.validation.nn_modules import ModuleTestConfig, BenchmarkConfig, Competitor
-
 
 torch.set_float32_matmul_precision('medium')
 torch._dynamo.config.recompile_limit = 100
@@ -137,79 +135,3 @@ class FP8Linear(nn.Linear):
             return out.reshape(*x.shape[:-1], -1)
         else:
             return F.linear(x, self.weight.type_as(x))
-
-
-##################################################
-#################### TESTING ####################
-##################################################
-
-
-def output_validator(
-        module: nn.Module,
-        inputs: Tuple[Any],
-        outputs: Tuple[Any],
-) -> None:
-    """
-    Validates whether the base module output meets expectations.
-    Testing framework always passes in tuples even if there's only one input/output tensor
-    """
-    input_tensor = inputs[0] 
-    output_tensor = outputs[0]
-    expected_shape = (*input_tensor.shape[:-1], module.out_features)
-    assert output_tensor.shape == expected_shape, f"Expected output shape {expected_shape}, but got {output_tensor.shape}"
-    assert output_tensor.dtype == input_tensor.dtype
-    
-
-__competitors__ = {
-    'FP8Linear': Competitor(module_class=FP8Linear),
-}
-
-
-def input_args(in_features, out_features):
-    return (torch.randn(2048, in_features, requires_grad=True),)
-
-__test_config__ = ModuleTestConfig(
-    competitors=__competitors__,
-    reference_competitor='FP8Linear',
-    test_cases=[
-        {
-            'init_args': {
-                'in_features': in_features, 
-                'out_features': out_features, 
-                'fp8': fp8,
-                },
-            'input_args': input_args(in_features, out_features),
-            'output_validator': output_validator,
-            'tolerances_fn': lambda x: {'atol': 1e-1, 'rtol': 1},          # Optional
-            'case_descriptor': f'(in_features,out_features)=({in_features},{out_features})_fp8={fp8}',
-        }
-        for in_features, out_features in [(128, 128), (512, 2048), (1832, 4271)]
-        for fp8 in ([True, False] if is_hopper_available() else [False])
-    ]
-)
-
-
-##################################################
-################# BENCHMARKING ###################
-##################################################
-
-
-def benchmark_input_provider(init_args: dict) -> tuple:
-    """Generates a standard input for benchmarking."""
-    # input shape: (batch_size, sequence_length, dimension)
-    return (torch.randn(1, 1, init_args['in_features']),)
-
-__benchmark_config__ = BenchmarkConfig(
-    module_name='FP8Linear',
-    competitors=__competitors__,
-    parameter_space={
-        'dim': [32, 64, 128, 512, 1024, 2048, 4096],
-        'fp8': [True, False] if is_hopper_available() else [False],
-    },
-    init_arg_builder=lambda params: {
-        'in_features': params['dim'],
-        'out_features': params['dim'],
-        'fp8': params['fp8'],
-    },
-    input_provider=benchmark_input_provider,
-)
