@@ -9,6 +9,7 @@ from tunalab.reproducibility import ReproducibilityManager
 from tunalab.device import get_default_device, get_available_devices, to_device, to_dtype
 from tunalab.distributed import barrier, is_main_process
 from tunalab.smart_train import smart_train
+from tunalab.evaluation import EvaluationRunner, register_handler
 
 # Protocols
 from tunalab.protocols import DaemonHook, StorageBackend, LLMClient, TrainingLoop
@@ -21,5 +22,6 @@ __all__ = [
     "barrier", "is_main_process",
     "smart_train",
     "DaemonHook", "StorageBackend", "LLMClient", "TrainingLoop",
+    "EvaluationRunner", "register_handler", 
 ]
 
