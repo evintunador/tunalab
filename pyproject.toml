@@ -18,6 +18,9 @@ llm = ["litellm"]
 dev = ["pytest", "matplotlib"]
 all = ["tunalab[llm,dev]"]
 
+[project.scripts]
+tunalab = "tunalab.cli.main:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

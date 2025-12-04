@@ -1,6 +1,6 @@
 import pytest
 
-from CLIs.multi_run import validate_config, format_summary, execute_multi_run
+from tunalab.cli.multi_run import validate_config, format_summary, execute_multi_run
 
 
 @pytest.mark.parametrize(
@@ -88,7 +88,7 @@ def test_execute_multi_run_missing_fields(monkeypatch):
     def mock_multi_run(config):
         raise AssertionError("multi_run should not be called with invalid config")
     
-    monkeypatch.setattr("CLIs.multi_run.multi_run", mock_multi_run)
+    monkeypatch.setattr("tunalab.cli.multi_run.multi_run", mock_multi_run)
     
     exit_code = execute_multi_run(config)
     assert exit_code == 1
@@ -109,7 +109,7 @@ def test_execute_multi_run_success(monkeypatch, capsys):
             "failed": 0,
         }
     
-    monkeypatch.setattr("CLIs.multi_run.multi_run", mock_multi_run)
+    monkeypatch.setattr("tunalab.cli.multi_run.multi_run", mock_multi_run)
     
     exit_code = execute_multi_run(config)
     assert exit_code == 0
@@ -135,7 +135,7 @@ def test_execute_multi_run_with_failures(monkeypatch, capsys):
             "failed": 1,
         }
     
-    monkeypatch.setattr("CLIs.multi_run.multi_run", mock_multi_run)
+    monkeypatch.setattr("tunalab.cli.multi_run.multi_run", mock_multi_run)
     
     exit_code = execute_multi_run(config)
     assert exit_code == 1
@@ -155,7 +155,7 @@ def test_execute_multi_run_exception(monkeypatch):
     def mock_multi_run(config):
         raise RuntimeError("Something went wrong")
     
-    monkeypatch.setattr("CLIs.multi_run.multi_run", mock_multi_run)
+    monkeypatch.setattr("tunalab.cli.multi_run.multi_run", mock_multi_run)
     
     exit_code = execute_multi_run(config)
     assert exit_code == 1
@@ -185,7 +185,7 @@ def test_execute_multi_run_exit_codes(monkeypatch, failed_count, expected_exit_c
             "failed": failed_count,
         }
     
-    monkeypatch.setattr("CLIs.multi_run.multi_run", mock_multi_run)
+    monkeypatch.setattr("tunalab.cli.multi_run.multi_run", mock_multi_run)
     
     exit_code = execute_multi_run(config)
     assert exit_code == expected_exit_code
