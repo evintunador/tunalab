@@ -11,17 +11,15 @@ dependencies = [
     "numpy",
     "pyyaml",
     "tqdm",
+    "marimo",
+    "pandas",
+    "plotly",
+    "orjson",
+    "litellm",
 ]
 
 [project.optional-dependencies]
-llm = ["litellm"]
 dev = ["pytest", "matplotlib"]
-notebooks = [
-    "marimo",
-    "pandas",
-    "plotly"
-]
-all = ["tunalab[llm,dev,notebooks]"]
 
 [project.scripts]
 tunalab = "tunalab.cli.main:main"

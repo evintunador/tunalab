@@ -17,7 +17,7 @@ def list_notebooks():
     print(f"Notebooks directory: {notebooks_dir}")
     print("Available notebooks:")
     for nb in sorted(notebooks):
-        print(f"  - {nb}")
+        print(f"  - {nb[:-3]}")
 
 
 def run_marimo(command, notebook_name, extra_args=None):
@@ -32,7 +32,7 @@ def run_marimo(command, notebook_name, extra_args=None):
         list_notebooks()
         sys.exit(1)
         
-    cmd = ["marimo", command, path]
+    cmd = [sys.executable, "-m", "marimo", command, path]
     if extra_args:
         cmd.extend(extra_args)
         
