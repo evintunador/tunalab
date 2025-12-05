@@ -1,5 +1,5 @@
 import sys
-from tunalab.cli import multi_run
+from tunalab.cli import multi_run, notebooks
 
 def main():
     if len(sys.argv) < 2:
@@ -13,6 +13,8 @@ def main():
 
     if command == "run-multi":
         multi_run.main()
+    elif command == "notebook":
+        notebooks.main()
     else:
         print(f"Unknown command: {command}")
         sys.exit(1)

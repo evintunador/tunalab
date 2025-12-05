@@ -14,7 +14,7 @@ def _():
     import pandas as pd
     import plotly.express as px
 
-    from ._experiment_comparison import (
+    from tunalab.notebooks._experiment_comparison import (
         find_run_directories,
         compare_runs,
         LogSchema,
