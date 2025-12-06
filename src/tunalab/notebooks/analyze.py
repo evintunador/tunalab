@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.16.0"
+__generated_with = "0.18.3"
 app = marimo.App(width="medium")
 
 
@@ -21,8 +21,8 @@ def _():
         normalize_metrics,
         flatten_config,
     )
-
     return (
+        Path,
         Run,
         find_dashboards,
         flatten_config,
@@ -34,7 +34,6 @@ def _():
         px,
         save_dashboard,
         yaml,
-        Path,
     )
 
 
@@ -49,7 +48,7 @@ def _(find_dashboards, mo):
     )
 
     mo.md(f"### Select Dashboard\n{dashboard_select}")
-    return dashboard_select, dashboards, options
+    return (dashboard_select,)
 
 
 @app.cell
@@ -99,40 +98,37 @@ def _(dashboard_select, load_dashboard, mo, yaml):
         value=metrics_yaml, language="yaml", label="Metrics Configuration"
     )
 
-    save_btn = mo.ui.button(label="Save Configuration")
+    save_btn = mo.ui.button(
+        label="Save Configuration",
+        value=0,
+        on_click=lambda value: value + 1,
+    )
 
     mo.md(
         f"""
     ## Configuration
     {name_input}
-    
+
     ### Defaults
     <div style="display: flex; gap: 1rem;">
         {x_axis_key_input}
         {x_axis_scale_input}
         {smoothing_input}
     </div>
-    
+
     ### Experiments
     {experiments_input}
-    
+
     ### Metrics
     {metrics_input}
-    
+
     <br/>
     {save_btn}
     """
     )
-
     return (
-        defaults,
         experiments_input,
-        experiments_list,
-        experiments_text,
-        initial_config,
         metrics_input,
-        metrics_list,
-        metrics_yaml,
         name_input,
         save_btn,
         smoothing_input,
@@ -186,25 +182,11 @@ def _(
             )
         except Exception as e:
             mo.output.replace(mo.md(f"❌ **Error saving configuration:** {e}"))
-
-    return (
-        current_config,
-        current_defaults,
-        current_experiments,
-        current_metrics,
-        x_key_val,
-    )
+    return current_config, current_experiments
 
 
 @app.cell
-def _(
-    Run,
-    current_config,
-    current_experiments,
-    glob,
-    mo,
-    normalize_metrics,
-):
+def _(Run, current_config, current_experiments, glob, mo, normalize_metrics):
     files = []
     for pattern in current_experiments:
         files.extend(glob.glob(pattern, recursive=True))
@@ -230,17 +212,31 @@ def _(
     if errors:
         error_list = "\n".join([f"- {e}" for e in errors])
         mo.md(f"**Errors loading files:**\n{error_list}")
-
-    return errors, files, normalized_data, runs
+    return normalized_data, runs
 
 
 @app.cell
-def _(Path, current_config, flatten_config, mo, normalized_data, pd, px, runs):
+def _(mo):
+    show_diff_only = mo.ui.switch(label="Show Differences Only", value=True)
+    return (show_diff_only,)
+
+
+@app.cell
+def _(
+    Path,
+    current_config,
+    flatten_config,
+    mo,
+    normalized_data,
+    pd,
+    px,
+    runs,
+    show_diff_only,
+):
     tabs = None
     scalar_df = None
     all_curves_long = None
     config_df = None
-    show_diff_only = None
 
     if normalized_data:
         tabs_content = {}
@@ -332,30 +328,28 @@ def _(Path, current_config, flatten_config, mo, normalized_data, pd, px, runs):
             # Gather all static configs and flatten them
             flattened_configs = {}
             all_keys = set()
-            
+
             for run in runs:
                 run_id = str(run.id) if isinstance(run.id, Path) else run.id
                 flattened = flatten_config(run.static)
                 flattened_configs[run_id] = flattened
                 all_keys.update(flattened.keys())
-            
+
             # Create DataFrame: Index = Config Keys, Columns = Run IDs
             config_data = {}
             for run_id in flattened_configs.keys():
                 config_data[run_id] = [
                     flattened_configs[run_id].get(key, None) for key in sorted(all_keys)
                 ]
-            
+
             config_df = pd.DataFrame(
                 config_data,
                 index=sorted(all_keys),
             )
-            
+
             # Replace None with "-" for better display
             config_df = config_df.fillna("-")
-            
-            show_diff_only = mo.ui.switch(label="Show Differences Only", value=True)
-            
+
             # Filter if show_diff_only is True
             if show_diff_only.value:
                 # Filter rows where there's more than one unique value
@@ -368,11 +362,11 @@ def _(Path, current_config, flatten_config, mo, normalized_data, pd, px, runs):
                         return False
                     # Show if there's more than one unique value
                     return len(unique_vals) > 1
-                
+
                 config_df_filtered = config_df[config_df.apply(has_differences, axis=1)]
             else:
                 config_df_filtered = config_df
-            
+
             if not config_df_filtered.empty:
                 config_table = mo.ui.table(config_df_filtered)
                 tabs_content["Configuration"] = mo.md(
@@ -394,8 +388,8 @@ def _(Path, current_config, flatten_config, mo, normalized_data, pd, px, runs):
             tabs_content["Configuration"] = mo.md("No runs loaded.")
 
         tabs = mo.ui.tabs(tabs_content)
-    
-    return all_curves_long, config_df, scalar_df, show_diff_only, tabs
+
+    return (tabs,)
 
 
 @app.cell
