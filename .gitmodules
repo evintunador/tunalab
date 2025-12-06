@@ -1,0 +1,3 @@
+[submodule "experiments/nanoGPT"]
+	path = experiments/nanoGPT
+	url = git@github.com:evintunador/nanoGPT.git
