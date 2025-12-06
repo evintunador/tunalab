@@ -1,0 +1,12 @@
+name: Test
+defaults:
+  x_axis_key: null
+  x_axis_scale: 1.0
+  smoothing: 0.0
+experiments:
+- experiments/**/*.jsonl
+metrics:
+- name: Loss
+  keys:
+  - loss
+  - train_loss

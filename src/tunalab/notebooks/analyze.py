@@ -19,11 +19,13 @@ def _():
         save_dashboard,
         Run,
         normalize_metrics,
+        flatten_config,
     )
 
     return (
         Run,
         find_dashboards,
+        flatten_config,
         glob,
         load_dashboard,
         mo,
@@ -233,10 +235,12 @@ def _(
 
 
 @app.cell
-def _(current_config, mo, normalized_data, pd, px):
+def _(Path, current_config, flatten_config, mo, normalized_data, pd, px, runs):
     tabs = None
     scalar_df = None
     all_curves_long = None
+    config_df = None
+    show_diff_only = None
 
     if normalized_data:
         tabs_content = {}
@@ -323,9 +327,75 @@ def _(current_config, mo, normalized_data, pd, px):
         else:
             tabs_content["Curves"] = mo.md("No curve data found.")
 
+        # --- Tab 3: Configuration ---
+        if runs:
+            # Gather all static configs and flatten them
+            flattened_configs = {}
+            all_keys = set()
+            
+            for run in runs:
+                run_id = str(run.id) if isinstance(run.id, Path) else run.id
+                flattened = flatten_config(run.static)
+                flattened_configs[run_id] = flattened
+                all_keys.update(flattened.keys())
+            
+            # Create DataFrame: Index = Config Keys, Columns = Run IDs
+            config_data = {}
+            for run_id in flattened_configs.keys():
+                config_data[run_id] = [
+                    flattened_configs[run_id].get(key, None) for key in sorted(all_keys)
+                ]
+            
+            config_df = pd.DataFrame(
+                config_data,
+                index=sorted(all_keys),
+            )
+            
+            # Replace None with "-" for better display
+            config_df = config_df.fillna("-")
+            
+            show_diff_only = mo.ui.switch(label="Show Differences Only", value=True)
+            
+            # Filter if show_diff_only is True
+            if show_diff_only.value:
+                # Filter rows where there's more than one unique value
+                # Treat "-" (missing) as a distinct value for comparison
+                def has_differences(row):
+                    # Get all unique values (including "-")
+                    unique_vals = set(row.unique())
+                    # If all values are "-" (missing), don't show it
+                    if unique_vals == {"-"}:
+                        return False
+                    # Show if there's more than one unique value
+                    return len(unique_vals) > 1
+                
+                config_df_filtered = config_df[config_df.apply(has_differences, axis=1)]
+            else:
+                config_df_filtered = config_df
+            
+            if not config_df_filtered.empty:
+                config_table = mo.ui.table(config_df_filtered)
+                tabs_content["Configuration"] = mo.md(
+                    f"""
+                    ### Hyperparameters
+                    {show_diff_only}
+                    {config_table}
+                    """
+                )
+            else:
+                tabs_content["Configuration"] = mo.md(
+                    f"""
+                    ### Hyperparameters
+                    {show_diff_only}
+                    No differences found in configuration (or no configuration data available).
+                    """
+                )
+        else:
+            tabs_content["Configuration"] = mo.md("No runs loaded.")
+
         tabs = mo.ui.tabs(tabs_content)
     
-    return all_curves_long, scalar_df, tabs
+    return all_curves_long, config_df, scalar_df, show_diff_only, tabs
 
 
 @app.cell

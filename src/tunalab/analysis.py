@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, TypedDict
+from typing import Dict, List, TypedDict, Any
 
 import pandas as pd
 import orjson
@@ -196,3 +196,34 @@ def save_dashboard(path: str | Path, config: DashboardConfig) -> None:
     
     with open(path, 'w') as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+
+def flatten_config(config: Dict[str, Any], sep: str = ".") -> Dict[str, Any]:
+    """
+    Recursively flatten a nested dictionary.
+    
+    Args:
+        config: Nested dictionary to flatten
+        sep: Separator to use between keys (default: ".")
+        
+    Returns:
+        Flattened dictionary with keys like "parent.child" instead of nested structure
+        
+    Examples:
+        >>> flatten_config({"git": {"hash": "abc"}})
+        {'git.hash': 'abc'}
+        >>> flatten_config({"a": {"b": {"c": 1}, "d": 2}})
+        {'a.b.c': 1, 'a.d': 2}
+    """
+    result = {}
+    
+    def _flatten(obj: Any, prefix: str = ""):
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                new_key = f"{prefix}{sep}{key}" if prefix else key
+                _flatten(value, new_key)
+        else:
+            result[prefix] = obj
+    
+    _flatten(config)
+    return result

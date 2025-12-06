@@ -1,7 +1,10 @@
 import sys
 import os
 import subprocess
+from pathlib import Path
+import yaml
 import tunalab.notebooks
+from tunalab.analysis import find_dashboards
 
 
 def get_notebooks_dir():
@@ -43,6 +46,101 @@ def run_marimo(command, notebook_name, extra_args=None):
         pass
     except FileNotFoundError:
         print("Error: 'marimo' is not installed or not in PATH.")
+
+
+def dashboard_list():
+    """List all dashboard configuration files."""
+    dashboards = find_dashboards(".")
+    if not dashboards:
+        print("No dashboard configuration files found.")
+        return
+    
+    print("Dashboard configurations:")
+    for db in dashboards:
+        print(f"  - {db}")
+
+
+def dashboard_run(name_or_path=None):
+    """Run the dashboard notebook."""
+    notebooks_dir = get_notebooks_dir()
+    notebook_path = os.path.join(notebooks_dir, "analyze.py")
+    
+    if not os.path.exists(notebook_path):
+        print(f"Error: Dashboard notebook not found at {notebook_path}")
+        sys.exit(1)
+    
+    cmd = [sys.executable, "-m", "marimo", "run", notebook_path]
+    
+    print(f"Running: {' '.join(cmd)}")
+    try:
+        subprocess.run(cmd, check=True)
+    except KeyboardInterrupt:
+        pass
+    except FileNotFoundError:
+        print("Error: 'marimo' is not installed or not in PATH.")
+
+
+def dashboard_new(name="dashboard"):
+    """Create a new boilerplate dashboard configuration file."""
+    if not name.endswith(".dashboard.yaml"):
+        if name.endswith(".yaml") or name.endswith(".yml"):
+            name = name.rsplit(".", 1)[0] + ".dashboard.yaml"
+        else:
+            name = name + ".dashboard.yaml"
+    
+    config = {
+        "name": name.replace(".dashboard.yaml", "").replace("_", " ").title(),
+        "defaults": {
+            "x_axis_key": None,
+            "x_axis_scale": 1.0,
+            "smoothing": 0.0,
+        },
+        "experiments": [
+            "experiments/**/*.jsonl",
+        ],
+        "metrics": [
+            {
+                "name": "Loss",
+                "keys": ["loss", "train_loss"],
+            },
+        ],
+    }
+    
+    path = Path(".") / name
+    if path.exists():
+        print(f"Error: Dashboard file already exists: {path}")
+        sys.exit(1)
+    
+    with open(path, 'w') as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+    
+    print(f"Created dashboard configuration: {path}")
+
+
+def dashboard_main():
+    """Handle dashboard subcommands."""
+    if len(sys.argv) < 2:
+        print("Usage: tunalab dashboard [list|run|new] [args...]")
+        print("  list              - List all dashboard configuration files")
+        print("  run [name_or_path] - Run the dashboard notebook")
+        print("  new [name]         - Create a new dashboard configuration file")
+        return
+    
+    subcommand = sys.argv[1]
+    sys.argv.pop(1)  # Remove subcommand from argv
+    
+    if subcommand == "list":
+        dashboard_list()
+    elif subcommand == "run":
+        name_or_path = sys.argv[1] if len(sys.argv) > 1 else None
+        dashboard_run(name_or_path)
+    elif subcommand == "new":
+        name = sys.argv[1] if len(sys.argv) > 1 else "dashboard"
+        dashboard_new(name)
+    else:
+        print(f"Unknown dashboard subcommand: {subcommand}")
+        print("Usage: tunalab dashboard [list|run|new] [args...]")
+        sys.exit(1)
 
 
 def main():
