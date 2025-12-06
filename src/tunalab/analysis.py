@@ -68,10 +68,7 @@ class Run:
             non_null_values = df[col].dropna()
             if len(non_null_values) > 0:
                 unique_values = non_null_values.unique()
-                if (
-                    len(unique_values) == 1
-                    and not pd.api.types.is_numeric_dtype(type(unique_values[0]))
-                ):
+                if len(unique_values) == 1:
                     static[col] = unique_values[0]
         columns_to_drop = list(static.keys())
         df = df.drop(columns=columns_to_drop)
