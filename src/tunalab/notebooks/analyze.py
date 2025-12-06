@@ -20,10 +20,12 @@ def _():
         Run,
         normalize_metrics,
         flatten_config,
+        extract_metrics_section,
     )
     return (
         Path,
         Run,
+        extract_metrics_section,
         find_dashboards,
         flatten_config,
         glob,
@@ -38,13 +40,31 @@ def _():
 
 
 @app.cell
-def _(find_dashboards, mo):
+def _(find_dashboards, mo, Path):
     dashboards = find_dashboards(".")
     options = {str(p): str(p) for p in dashboards}
+    
+    initial_value = None
+    try:
+        cli_args = mo.cli_args()
+        if cli_args and "dashboard" in cli_args:
+            dashboard_arg = cli_args["dashboard"]
+            if dashboard_arg in options:
+                initial_value = dashboard_arg
+            else:
+                arg_path = Path(dashboard_arg).resolve()
+                for opt_path_str in options.keys():
+                    if Path(opt_path_str).resolve() == arg_path:
+                        initial_value = opt_path_str
+                        break
+    except Exception:
+        # If CLI args aren't available or there's an error, just use None
+        pass
 
     dashboard_select = mo.ui.dropdown(
         options=options,
         label="Select Dashboard",
+        value=initial_value if initial_value else (list(options.keys())[0] if options else None),
     )
 
     mo.md(f"### Select Dashboard\n{dashboard_select}")
@@ -52,9 +72,15 @@ def _(find_dashboards, mo):
 
 
 @app.cell
-def _(dashboard_select, load_dashboard, mo, yaml):
+def _(dashboard_select, extract_metrics_section, load_dashboard, mo, yaml):
     if dashboard_select.value:
         initial_config = load_dashboard(dashboard_select.value)
+        # Extract raw metrics YAML to preserve comments
+        raw_metrics_yaml = extract_metrics_section(dashboard_select.value)
+        if not raw_metrics_yaml:
+            # Fallback to dumping if extraction failed
+            metrics_list = initial_config.get("metrics", [])
+            raw_metrics_yaml = yaml.dump(metrics_list, default_flow_style=False, sort_keys=False)
     else:
         initial_config = {
             "name": "New Dashboard",
@@ -62,6 +88,7 @@ def _(dashboard_select, load_dashboard, mo, yaml):
             "experiments": [],
             "metrics": [],
         }
+        raw_metrics_yaml = ""
 
     name_input = mo.ui.text(
         value=initial_config.get("name", ""), 
@@ -92,10 +119,8 @@ def _(dashboard_select, load_dashboard, mo, yaml):
         full_width=True,
     )
 
-    metrics_list = initial_config.get("metrics", [])
-    metrics_yaml = yaml.dump(metrics_list, default_flow_style=False, sort_keys=False)
     metrics_input = mo.ui.code_editor(
-        value=metrics_yaml, language="yaml", label="Metrics Configuration"
+        value=raw_metrics_yaml, language="yaml", label="Metrics Configuration"
     )
 
     save_btn = mo.ui.button(
@@ -152,7 +177,12 @@ def _(
     yaml,
 ):
     try:
-        current_metrics = yaml.safe_load(metrics_input.value) or []
+        parsed_metrics = yaml.safe_load(metrics_input.value) or []
+        # Filter out invalid entries - only keep dictionaries with 'name' and 'keys'
+        current_metrics = [
+            m for m in parsed_metrics
+            if isinstance(m, dict) and "name" in m and "keys" in m
+        ]
     except yaml.YAMLError:
         current_metrics = []
 
@@ -176,7 +206,8 @@ def _(
 
     if save_btn.value and dashboard_select.value:
         try:
-            save_dashboard(dashboard_select.value, current_config)
+            # Pass the raw metrics YAML to preserve comments
+            save_dashboard(dashboard_select.value, current_config, metrics_input.value)
             mo.output.replace(
                 mo.md(f"✅ **Configuration saved to `{dashboard_select.value}`**")
             )

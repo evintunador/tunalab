@@ -71,6 +71,13 @@ def dashboard_run(name_or_path=None):
     
     cmd = [sys.executable, "-m", "marimo", "run", notebook_path]
     
+    if name_or_path:
+        dashboard_path = resolve_dashboard_path(name_or_path)
+        if dashboard_path:
+            cmd.extend(["--", "--dashboard", str(dashboard_path)])
+        else:
+            print(f"Warning: Dashboard '{name_or_path}' not found. Opening without pre-selection.")
+    
     print(f"Running: {' '.join(cmd)}")
     try:
         subprocess.run(cmd, check=True)
@@ -78,6 +85,40 @@ def dashboard_run(name_or_path=None):
         pass
     except FileNotFoundError:
         print("Error: 'marimo' is not installed or not in PATH.")
+
+
+def resolve_dashboard_path(name_or_path: str) -> Path | None:
+    """
+    Resolve a dashboard name or path to a full Path.
+    
+    Args:
+        name_or_path: Dashboard name (e.g., "out-shakespeare-char") or path
+        
+    Returns:
+        Path to the dashboard file, or None if not found
+    """
+    name_or_path = name_or_path.strip()
+    
+    path = Path(name_or_path)
+    if path.exists() and path.is_file():
+        return path.resolve()
+    
+    if not name_or_path.endswith(".dashboard.yaml"):
+        name_or_path = name_or_path + ".dashboard.yaml"
+    
+    dashboards = find_dashboards(".")
+    
+    for db in dashboards:
+        if db.name == name_or_path or str(db) == name_or_path:
+            return db.resolve()
+    
+    name_without_ext = name_or_path.replace(".dashboard.yaml", "")
+    for db in dashboards:
+        db_name_without_ext = db.name.replace(".dashboard.yaml", "")
+        if db_name_without_ext == name_without_ext:
+            return db.resolve()
+    
+    return None
 
 
 def dashboard_new(name="dashboard"):
