@@ -1,192 +1,248 @@
 import pytest
+import json
+import tempfile
+from pathlib import Path
 
-from tunalab.cli.multi_run import validate_config, format_summary, execute_multi_run
+from tunalab.cli.multi_run import (
+    validate_config,
+    expand_parameters,
+    _expand_grid,
+    _expand_paired,
+    detect_old_parameter_format,
+    build_command,
+    RunEntry,
+    create_sweep_directory,
+    write_manifest_skeleton,
+    update_manifest_entry,
+    load_failed_runs,
+)
 
 
 @pytest.mark.parametrize(
-    "config,expected_missing",
+    "config,is_valid",
     [
-        ({"command": "python main.py", "parameters": {"lr": [0.1, 0.01]}}, []),
-        ({"command": "python main.py"}, ["parameters"]),
-        ({"parameters": {"lr": [0.1, 0.01]}}, ["command"]),
-        ({}, ["command", "parameters"]),
-        ({"command": "python main.py", "parameters": {}, "extra": "field"}, []),
+        ({"command": {"script": "main.py"}, "parameters": {"grid": {"lr": [0.1]}}}, True),
+        ({"command": {"script": "main.py"}}, False),
+        ({"parameters": {"grid": {"lr": [0.1]}}}, False),
+        ({}, False),
+        ({"raw_commands": ["python main.py"]}, True),
     ],
 )
-def test_validate_config(config, expected_missing):
-    """Tests configuration validation with various inputs."""
+def test_validate_config(config, is_valid):
     missing = validate_config(config)
-    assert sorted(missing) == sorted(expected_missing)
-
-
-def test_validate_config_all_fields_present():
-    """Tests validation passes with all required fields."""
-    config = {
-        "command": "python main.py",
-        "parameters": {"lr": [0.1, 0.01], "batch_size": [32, 64]},
-        "execution": {"mode": "parallel"},
-    }
-    missing = validate_config(config)
-    assert missing == []
+    assert (len(missing) == 0) == is_valid
 
 
 @pytest.mark.parametrize(
-    "summary,expected_substrings",
+    "grid_params,expected_count",
     [
-        (
-            {"name": "test_run", "total_runs": 10, "successful": 10, "failed": 0},
-            ["test_run", "Total runs: 10", "Successful: 10", "Failed: 0"],
-        ),
-        (
-            {"name": "exp_batch", "total_runs": 5, "successful": 3, "failed": 2},
-            ["exp_batch", "Total runs: 5", "Successful: 3", "Failed: 2"],
-        ),
-        (
-            {"name": "single", "total_runs": 1, "successful": 0, "failed": 1},
-            ["single", "Total runs: 1", "Successful: 0", "Failed: 1"],
-        ),
+        ({"lr": [0.001, 0.01], "wd": [0.0, 0.1]}, 4),
+        ({"lr": [0.001, 0.01]}, 2),
+        ({"lr": [0.001]}, 1),
+        ({}, 1),
     ],
 )
-def test_format_summary(summary, expected_substrings):
-    """Tests summary formatting with various inputs."""
-    formatted = format_summary(summary)
-    
-    for expected in expected_substrings:
-        assert expected in formatted
-    
-    # Check that it contains separator lines
-    assert "=" * 60 in formatted
+def test_expand_grid(grid_params, expected_count):
+    result = _expand_grid(grid_params)
+    assert len(result) == expected_count
 
 
-def test_format_summary_structure():
-    """Tests the structure and ordering of formatted summary."""
-    summary = {
-        "name": "test",
-        "total_runs": 5,
-        "successful": 4,
-        "failed": 1,
+def test_expand_grid_list_constant():
+    grid_params = {
+        "lr": [0.001, 0.01],
+        "means": [[0.456, 0.428, 0.493]]
     }
+    result = _expand_grid(grid_params)
     
-    formatted = format_summary(summary)
-    lines = [line for line in formatted.split("\n") if line]
-    
-    # Should have 6 lines (empty, separator, name, total, successful, failed, separator)
-    assert len(lines) == 6
-    
-    # Check order
-    assert "test" in lines[1]
-    assert "Total runs:" in lines[2]
-    assert "Successful:" in lines[3]
-    assert "Failed:" in lines[4]
+    assert len(result) == 2
+    for combo in result:
+        assert combo["means"] == [0.456, 0.428, 0.493]
 
 
-def test_execute_multi_run_missing_fields(monkeypatch):
-    """Tests that execute_multi_run returns 1 when config is invalid."""
-    config = {"command": "python main.py"}  # Missing 'parameters'
-    
-    # Mock multi_run to ensure it's not called
-    def mock_multi_run(config):
-        raise AssertionError("multi_run should not be called with invalid config")
-    
-    monkeypatch.setattr("tunalab.cli.multi_run.multi_run", mock_multi_run)
-    
-    exit_code = execute_multi_run(config)
-    assert exit_code == 1
-
-
-def test_execute_multi_run_success(monkeypatch, capsys):
-    """Tests successful multi-run execution."""
-    config = {
-        "command": "python main.py",
-        "parameters": {"lr": [0.1, 0.01]},
-    }
-    
-    def mock_multi_run(config):
-        return {
-            "name": "test_run",
-            "total_runs": 2,
-            "successful": 2,
-            "failed": 0,
+def test_expand_paired():
+    paired_groups = [
+        {
+            "name": "architecture",
+            "combinations": [
+                {"num_layers": 4, "hidden_dim": 128},
+                {"num_layers": 6, "hidden_dim": 256}
+            ]
         }
+    ]
+    result = _expand_paired(paired_groups)
     
-    monkeypatch.setattr("tunalab.cli.multi_run.multi_run", mock_multi_run)
-    
-    exit_code = execute_multi_run(config)
-    assert exit_code == 0
-    
-    # Check that summary was printed
-    captured = capsys.readouterr()
-    assert "test_run" in captured.out
-    assert "Successful: 2" in captured.out
+    assert len(result) == 2
+    assert {"num_layers": 4, "hidden_dim": 128} in result
 
 
-def test_execute_multi_run_with_failures(monkeypatch, capsys):
-    """Tests multi-run execution with some failures."""
+def test_expand_parameters_grid_and_paired():
     config = {
-        "command": "python main.py",
-        "parameters": {"lr": [0.1, 0.01]},
-    }
-    
-    def mock_multi_run(config):
-        return {
-            "name": "test_run",
-            "total_runs": 2,
-            "successful": 1,
-            "failed": 1,
+        "parameters": {
+            "grid": {"lr": [0.001, 0.01]},
+            "paired": [{
+                "name": "arch",
+                "combinations": [
+                    {"layers": 4, "dim": 128},
+                    {"layers": 6, "dim": 256}
+                ]
+            }]
         }
+    }
+    result = expand_parameters(config)
     
-    monkeypatch.setattr("tunalab.cli.multi_run.multi_run", mock_multi_run)
-    
-    exit_code = execute_multi_run(config)
-    assert exit_code == 1
-    
-    # Check that summary was printed
-    captured = capsys.readouterr()
-    assert "Failed: 1" in captured.out
+    assert len(result) == 4
 
 
-def test_execute_multi_run_exception(monkeypatch):
-    """Tests that exceptions in multi_run are caught and return error code."""
+def test_expand_parameters_conflict_detection():
     config = {
-        "command": "python main.py",
-        "parameters": {"lr": [0.1, 0.01]},
+        "parameters": {
+            "grid": {"lr": [0.001, 0.01]},
+            "paired": [{
+                "name": "arch",
+                "combinations": [
+                    {"lr": 0.001, "layers": 4},
+                ]
+            }]
+        }
     }
     
-    def mock_multi_run(config):
-        raise RuntimeError("Something went wrong")
+    with pytest.raises(ValueError, match="both grid and paired"):
+        expand_parameters(config)
+
+
+def test_expand_parameters_raw_commands():
+    config = {"raw_commands": ["python train.py --lr 0.001"]}
+    result = expand_parameters(config)
     
-    monkeypatch.setattr("tunalab.cli.multi_run.multi_run", mock_multi_run)
-    
-    exit_code = execute_multi_run(config)
-    assert exit_code == 1
+    assert result == [{}]
+
+
+def test_detect_old_parameter_format():
+    assert detect_old_parameter_format({"lr": [0.001], "device": "cuda"}) is True
+    assert detect_old_parameter_format({"grid": {"lr": [0.001]}}) is False
+    assert detect_old_parameter_format({"device": "cuda"}) is False
 
 
 @pytest.mark.parametrize(
-    "failed_count,expected_exit_code",
+    "cmd_type,expected_in_cmd",
     [
-        (0, 0),
-        (1, 1),
-        (5, 1),
-        (10, 1),
+        ("python", "python train.py"),
+        ("torchrun", ["torchrun", "--nproc_per_node=2", "train.py"]),
     ],
 )
-def test_execute_multi_run_exit_codes(monkeypatch, failed_count, expected_exit_code):
-    """Tests that exit code is determined by failure count."""
-    config = {
-        "command": "python main.py",
-        "parameters": {"lr": [0.1, 0.01]},
+def test_build_command(cmd_type, expected_in_cmd):
+    command_config = {
+        "type": cmd_type,
+        "script": "train.py",
+        "nproc_per_node": 2
     }
+    params = {"lr": 0.001}
     
-    def mock_multi_run(config):
-        return {
-            "name": "test",
-            "total_runs": 10,
-            "successful": 10 - failed_count,
-            "failed": failed_count,
-        }
+    cmd = build_command(command_config, params)
     
-    monkeypatch.setattr("tunalab.cli.multi_run.multi_run", mock_multi_run)
-    
-    exit_code = execute_multi_run(config)
-    assert exit_code == expected_exit_code
+    if isinstance(expected_in_cmd, list):
+        for part in expected_in_cmd:
+            assert part in cmd
+    else:
+        assert expected_in_cmd in cmd
+    assert "--lr 0.001" in cmd
 
+
+def test_build_command_with_list():
+    command_config = {"type": "python", "script": "train.py"}
+    params = {"means": [0.456, 0.428, 0.493]}
+    
+    cmd = build_command(command_config, params)
+    assert "[0.456, 0.428, 0.493]" in cmd
+
+
+def test_create_sweep_directory():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        import os
+        original_cwd = Path.cwd()
+        try:
+            os.chdir(tmpdir)
+            
+            config = {"name": "test_sweep"}
+            sweep_dir = create_sweep_directory(config)
+            
+            assert sweep_dir.exists()
+            assert (sweep_dir / "logs").exists()
+            assert (sweep_dir / "sweep_config.yaml").exists()
+            assert "test_sweep" in str(sweep_dir)
+        finally:
+            os.chdir(original_cwd)
+
+
+def test_manifest_workflow():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        sweep_dir = Path(tmpdir)
+        
+        runs = [
+            RunEntry(
+                run_id="run_1",
+                run_index=1,
+                parameters={"lr": 0.001},
+                command="python train.py --lr 0.001",
+                status="pending"
+            ),
+            RunEntry(
+                run_id="run_2",
+                run_index=2,
+                parameters={"lr": 0.01},
+                command="python train.py --lr 0.01",
+                status="pending"
+            )
+        ]
+        
+        write_manifest_skeleton(sweep_dir, runs)
+        
+        manifest_path = sweep_dir / "runs_manifest.jsonl"
+        assert manifest_path.exists()
+        
+        update_manifest_entry(
+            sweep_dir,
+            "run_1",
+            {"status": "success", "exit_code": 0}
+        )
+        
+        with open(manifest_path) as f:
+            lines = f.readlines()
+        
+        assert len(lines) == 2
+        entry1 = json.loads(lines[0])
+        assert entry1["status"] == "success"
+        assert entry1["exit_code"] == 0
+
+
+def test_load_failed_runs():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        sweep_dir = Path(tmpdir)
+        
+        runs = [
+            RunEntry(
+                run_id="run_1",
+                run_index=1,
+                parameters={"lr": 0.001},
+                command="python train.py --lr 0.001",
+                status="success",
+                exit_code=0
+            ),
+            RunEntry(
+                run_id="run_2",
+                run_index=2,
+                parameters={"lr": 0.01},
+                command="python train.py --lr 0.01",
+                status="failed",
+                exit_code=1
+            )
+        ]
+        
+        write_manifest_skeleton(sweep_dir, runs)
+        
+        failed = load_failed_runs(sweep_dir)
+        
+        assert len(failed) == 1
+        assert failed[0]["run_id"] == "run_2"
+        assert failed[0]["status"] == "pending"
+        assert failed[0]["exit_code"] is None
