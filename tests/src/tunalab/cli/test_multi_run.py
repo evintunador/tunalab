@@ -3,7 +3,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from tunalab.cli.multi_run import (
+from tunalab.cli.commands.multi_run import (
     validate_config,
     expand_parameters,
     _expand_grid,

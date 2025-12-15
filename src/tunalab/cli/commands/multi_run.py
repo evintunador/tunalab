@@ -617,7 +617,8 @@ def execute_multi_run(config: dict) -> int:
         return 1
 
 
-def main():
+def _main_impl():
+    """Internal implementation for the multi-run command."""
     parser = argparse.ArgumentParser(
         description="Run multiple experiments with different parameter configurations.",
         formatter_class=argparse.RawTextHelpFormatter,
@@ -627,5 +628,17 @@ def main():
     sys.exit(exit_code)
 
 
+class Command:
+    """Multi-run command for hyperparameter sweeps."""
+    
+    name = "multi-run"
+    description = "Run hyperparameter sweeps across multiple configurations"
+    
+    @staticmethod
+    def main():
+        _main_impl()
+
+
 if __name__ == "__main__":
-    main()
+    _main_impl()
+

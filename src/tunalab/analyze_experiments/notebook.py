@@ -13,10 +13,10 @@ def _():
     import glob
     from pathlib import Path
 
-    from tunalab.analysis import (
-        find_dashboards,
-        load_dashboard,
-        save_dashboard,
+    from tunalab.analyze_experiments import (
+        find_configs,
+        load_config,
+        save_config,
         Run,
         normalize_metrics,
         flatten_config,
@@ -26,64 +26,61 @@ def _():
         Path,
         Run,
         extract_metrics_section,
-        find_dashboards,
+        find_configs,
         flatten_config,
         glob,
-        load_dashboard,
+        load_config,
         mo,
         normalize_metrics,
         pd,
         px,
-        save_dashboard,
+        save_config,
         yaml,
     )
 
 
 @app.cell
-def _(find_dashboards, mo, Path):
-    dashboards = find_dashboards(".")
-    options = {str(p): str(p) for p in dashboards}
+def _(find_configs, mo, Path):
+    configs = find_configs(".")
+    options = {str(p): str(p) for p in configs}
     
     initial_value = None
     try:
         cli_args = mo.cli_args()
-        if cli_args and "dashboard" in cli_args:
-            dashboard_arg = cli_args["dashboard"]
-            if dashboard_arg in options:
-                initial_value = dashboard_arg
+        if cli_args and "config" in cli_args:
+            config_arg = cli_args["config"]
+            if config_arg in options:
+                initial_value = config_arg
             else:
-                arg_path = Path(dashboard_arg).resolve()
+                arg_path = Path(config_arg).resolve()
                 for opt_path_str in options.keys():
                     if Path(opt_path_str).resolve() == arg_path:
                         initial_value = opt_path_str
                         break
     except Exception:
-        # If CLI args aren't available or there's an error, just use None
         pass
 
-    dashboard_select = mo.ui.dropdown(
+    config_select = mo.ui.dropdown(
         options=options,
-        label="Select Dashboard",
+        label="Select Configuration",
         value=initial_value if initial_value else (list(options.keys())[0] if options else None),
     )
 
-    mo.md(f"### Select Dashboard\n{dashboard_select}")
-    return (dashboard_select,)
+    mo.md(f"### Select Configuration\n{config_select}")
+    return (config_select,)
 
 
 @app.cell
-def _(dashboard_select, extract_metrics_section, load_dashboard, mo, yaml):
-    if dashboard_select.value:
-        initial_config = load_dashboard(dashboard_select.value)
-        # Extract raw metrics YAML to preserve comments
-        raw_metrics_yaml = extract_metrics_section(dashboard_select.value)
+def _(config_select, extract_metrics_section, load_config, mo, yaml):
+    if config_select.value:
+        initial_config = load_config(config_select.value)
+        raw_metrics_yaml = extract_metrics_section(config_select.value)
         if not raw_metrics_yaml:
-            # Fallback to dumping if extraction failed
             metrics_list = initial_config.get("metrics", [])
             raw_metrics_yaml = yaml.dump(metrics_list, default_flow_style=False, sort_keys=False)
     else:
         initial_config = {
-            "name": "New Dashboard",
+            "name": "New Analysis",
             "defaults": {"x_axis_key": None, "x_axis_scale": 1.0, "smoothing": 0.0},
             "experiments": [],
             "metrics": [],
@@ -92,7 +89,7 @@ def _(dashboard_select, extract_metrics_section, load_dashboard, mo, yaml):
 
     name_input = mo.ui.text(
         value=initial_config.get("name", ""), 
-        label="Dashboard Name"
+        label="Analysis Name"
     )
 
     defaults = initial_config.get("defaults", {})
@@ -164,13 +161,13 @@ def _(dashboard_select, extract_metrics_section, load_dashboard, mo, yaml):
 
 @app.cell
 def _(
-    dashboard_select,
+    config_select,
     experiments_input,
     metrics_input,
     mo,
     name_input,
     save_btn,
-    save_dashboard,
+    save_config,
     smoothing_input,
     x_axis_key_input,
     x_axis_scale_input,
@@ -178,7 +175,6 @@ def _(
 ):
     try:
         parsed_metrics = yaml.safe_load(metrics_input.value) or []
-        # Filter out invalid entries - only keep dictionaries with 'name' and 'keys'
         current_metrics = [
             m for m in parsed_metrics
             if isinstance(m, dict) and "name" in m and "keys" in m
@@ -204,12 +200,11 @@ def _(
         "metrics": current_metrics,
     }
 
-    if save_btn.value and dashboard_select.value:
+    if save_btn.value and config_select.value:
         try:
-            # Pass the raw metrics YAML to preserve comments
-            save_dashboard(dashboard_select.value, current_config, metrics_input.value)
+            save_config(config_select.value, current_config, metrics_input.value)
             mo.output.replace(
-                mo.md(f"✅ **Configuration saved to `{dashboard_select.value}`**")
+                mo.md(f"✅ **Configuration saved to `{config_select.value}`**")
             )
         except Exception as e:
             mo.output.replace(mo.md(f"❌ **Error saving configuration:** {e}"))
@@ -312,22 +307,18 @@ def _(
         x_scale = _defaults["x_axis_scale"]
 
         for run_id, df in normalized_data.items():
-            # Determine X
             if x_key and x_key in df.columns:
                 x_values = df[x_key]
             else:
                 x_values = df.index
 
-            # Scale X
             try:
-                # Handle index vs series
                 if hasattr(x_values, "to_series"):
                     x_values = x_values.to_series()
                 x_values = x_values.astype(float) * x_scale
             except (ValueError, TypeError):
-                pass  # Keep original if conversion fails
+                pass
 
-            # Get metric columns
             plot_cols = [c for c in df.columns if c in metric_names]
 
             if plot_cols:
@@ -356,7 +347,6 @@ def _(
 
         # --- Tab 3: Configuration ---
         if runs:
-            # Gather all static configs and flatten them
             flattened_configs = {}
             all_keys = set()
 
@@ -366,7 +356,6 @@ def _(
                 flattened_configs[run_id] = flattened
                 all_keys.update(flattened.keys())
 
-            # Create DataFrame: Index = Config Keys, Columns = Run IDs
             config_data = {}
             for run_id in flattened_configs.keys():
                 config_data[run_id] = [
@@ -378,20 +367,13 @@ def _(
                 index=sorted(all_keys),
             )
 
-            # Replace None with "-" for better display
             config_df = config_df.fillna("-")
 
-            # Filter if show_diff_only is True
             if show_diff_only.value:
-                # Filter rows where there's more than one unique value
-                # Treat "-" (missing) as a distinct value for comparison
                 def has_differences(row):
-                    # Get all unique values (including "-")
                     unique_vals = set(row.unique())
-                    # If all values are "-" (missing), don't show it
                     if unique_vals == {"-"}:
                         return False
-                    # Show if there's more than one unique value
                     return len(unique_vals) > 1
 
                 config_df_filtered = config_df[config_df.apply(has_differences, axis=1)]
@@ -431,3 +413,4 @@ def _(tabs):
 
 if __name__ == "__main__":
     app.run()
+

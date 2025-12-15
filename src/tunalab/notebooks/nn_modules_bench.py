@@ -12,7 +12,7 @@ def _():
     import plotly.graph_objects as go
     import glob
     import os
-    from tunalab.catalog_bootstrap import get_artifact_root
+    from tunalab.paths import get_artifact_root
     return get_artifact_root, glob, go, mo, os, pd, px
 
 
