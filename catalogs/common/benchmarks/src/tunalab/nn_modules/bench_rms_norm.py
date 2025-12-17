@@ -1,13 +1,12 @@
-"""Benchmark for RMSNorm module."""
-
 import torch
-from tunalab.testing import BenchmarkRunner
+
+from tunalab.benchmark_modules import ModuleBenchmarkRunner
 from tunalab.nn_modules.norms.rms_norm import RMSNorm
 
 
 def main():
     """Run RMSNorm benchmarks."""
-    runner = BenchmarkRunner()
+    runner = ModuleBenchmarkRunner()
     
     results = runner.run_module_benchmark(
         module_class=RMSNorm,
@@ -27,4 +26,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

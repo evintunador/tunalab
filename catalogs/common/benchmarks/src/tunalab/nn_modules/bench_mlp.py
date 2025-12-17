@@ -1,13 +1,12 @@
-"""Benchmark for MLP module."""
-
 import torch
-from tunalab.testing import BenchmarkRunner
+
+from tunalab.benchmark_modules import ModuleBenchmarkRunner
 from tunalab.nn_modules.channel_mixing.mlp import MLP
 
 
 def main():
     """Run MLP benchmarks."""
-    runner = BenchmarkRunner()
+    runner = ModuleBenchmarkRunner()
     
     results = runner.run_module_benchmark(
         module_class=MLP,
@@ -33,4 +32,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

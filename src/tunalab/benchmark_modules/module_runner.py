@@ -1,5 +1,3 @@
-"""Standardized benchmark runner that produces CSV files for analysis."""
-
 from typing import Type, Dict, List, Any, Callable, Optional
 from pathlib import Path
 import itertools
@@ -9,37 +7,13 @@ import torch.nn as nn
 import pandas as pd
 from tqdm import tqdm
 
-from tunalab.testing.benchmarking import measure_performance
+from tunalab.benchmark_modules.measurements import measure_performance
 from tunalab.testing.device import to_device, to_dtype
 from tunalab.paths import get_artifact_root
 
 
-class BenchmarkRunner:
-    """
-    Standardized benchmark runner that produces CSV files compatible with
-    the benchmark visualization notebook.
-    
-    The output format matches the old system:
-        Columns: [param1, param2, ..., dtype, class, device, measurement, value]
-    
-    Example:
-        runner = BenchmarkRunner()
-        results = runner.run_module_benchmark(
-            module_class=RMSNorm,
-            module_name='RMSNorm',
-            parameter_space={'dim': [256, 512, 1024]},
-            init_arg_builder=lambda p: {'dim': p['dim']},
-            input_provider=lambda p: (torch.randn(32, 512, p['dim']),),
-        )
-    """
-    
+class ModuleBenchmarkRunner:
     def __init__(self, output_dir: Optional[Path] = None):
-        """
-        Initialize benchmark runner.
-        
-        Args:
-            output_dir: Directory to save CSV files. Defaults to artifacts/nn_modules/
-        """
         self.output_dir = output_dir or (get_artifact_root() / "nn_modules")
         self.output_dir.mkdir(parents=True, exist_ok=True)
     
@@ -71,7 +45,6 @@ class BenchmarkRunner:
             DataFrame with columns: [param1, ..., dtype, class, device, measurement, value]
             Also saves CSV files to output_dir/{module_name}_{device}.csv
         """
-        # Default devices and dtypes
         if devices is None:
             if torch.cuda.is_available():
                 devices = ['cuda']
@@ -83,12 +56,10 @@ class BenchmarkRunner:
         if dtypes is None:
             dtypes = [torch.float32, torch.float16, torch.bfloat16]
         
-        # Build parameter combinations
         param_names = list(parameter_space.keys())
         param_values = parameter_space.values()
         param_combinations = list(itertools.product(*param_values))
         
-        # Run benchmarks
         all_results = []
         
         for device in devices:
@@ -102,7 +73,6 @@ class BenchmarkRunner:
                     params = dict(zip(param_names, combo))
                     
                     try:
-                        # Build module and inputs
                         init_args = init_arg_builder(params)
                         module = module_class(**init_args)
                         module = to_dtype(to_device(module, device), dtype)
@@ -110,10 +80,8 @@ class BenchmarkRunner:
                         inputs = input_provider(init_args)
                         inputs = to_dtype(to_device(inputs, device), dtype)
                         
-                        # Measure performance
                         perf_metrics = measure_performance(module, inputs, device, num_repeats)
                         
-                        # Store results in tidy format matching old system
                         for metric_name, value in perf_metrics.items():
                             result_row = params.copy()
                             result_row['dtype'] = str(dtype).split('.')[-1]  # e.g., 'float32'
@@ -128,7 +96,6 @@ class BenchmarkRunner:
                         tqdm.write(f"[WARNING] Skipping {module_name}({param_str}) on {device}/{dtype}: {e}")
                         continue
             
-            # Save device-specific CSV
             if device_results:
                 df = pd.DataFrame(device_results)
                 
@@ -140,6 +107,5 @@ class BenchmarkRunner:
                 
                 all_results.extend(device_results)
         
-        # Return combined DataFrame
         return pd.DataFrame(all_results) if all_results else pd.DataFrame()
 

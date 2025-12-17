@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.18.0"
+__generated_with = "0.18.3"
 app = marimo.App(width="full")
 
 
@@ -19,7 +19,7 @@ def _():
 @app.cell
 def _(mo):
     mo.md("""
-    # Benchmark Results Viewer
+    # Optimizer Benchmark Results Viewer
     """)
     return
 
@@ -27,13 +27,12 @@ def _(mo):
 @app.cell
 def _(get_artifact_root, glob, mo, os):
     plot_titles = [
-        "Forward Time (ms)",
-        "Backward Time (ms)",
-        "Forward Peak Memory (GB)",
-        "Backward Peak Memory (GB)",
+        "avg_step_time_ms",
+        "loss_reduction_pct",
+        "loss_reduction_per_ms",
     ]
 
-    bench_dir = get_artifact_root() / "nn_modules"
+    bench_dir = get_artifact_root() / "optimizers"
     csv_files = glob.glob(str(bench_dir / '*.csv'))
 
     if not csv_files:
@@ -71,9 +70,9 @@ def _(csv_multiselector, dfs, os, pd):
     else:
         processed_dfs = []
         for path, single_df in zip(csv_multiselector.value, dfs):
-            # Extract module name from filename, e.g., 'MLP_mps.csv' -> 'MLP'
-            module_name = os.path.basename(path).split('_')[0]
-            single_df['module'] = module_name
+            # Extract optimizer name from filename, e.g., 'Muon_mps.csv' -> 'Muon'
+            optimizer_name = os.path.basename(path).split('_')[0]
+            single_df['optimizer'] = optimizer_name
             processed_dfs.append(single_df)
         del path, single_df
 
@@ -101,10 +100,10 @@ def _(df, dfs, mo):
             label="Select x-axis for measurement:",
             value=x_axis_options[0],
         )
-        # optional second x-axis. if equals the first or "None", then 2d plot later isntead of 3d
+        # optional second x-axis. if equals the first or "None", then 2d plot later instead of 3d
         x_axis_dropdown_2 = mo.ui.dropdown(
             options=["None"] + x_axis_options,
-            label="Optoinal second x-axis: ",
+            label="Optional second x-axis: ",
             value="None",
         )
     mo.vstack([x_axis_dropdown, x_axis_dropdown_2]) if x_axis_dropdown else None
@@ -116,11 +115,11 @@ def _(df, dfs, mo):
     if not dfs:
         filters_form = mo.md("No CSVs selected. Please select one or more benchmark CSVs from the dropdown above.")
     else:
-        # Identify columns to create filters for. This will now include 'module'.
+        # Identify columns to create filters for. This will now include 'optimizer'.
         cols_to_filter = [
             col for col in df.columns 
             if (
-                col not in ['value', 'measurement', 'module'] 
+                col not in ['value', 'measurement', 'optimizer'] 
                 and df[col].dtype == 'object'
             )
         ]
@@ -202,11 +201,11 @@ def _(active_axes, df, filters_form, slice_sliders_form):
                 filtered_df = filtered_df[filtered_df[column].isna()]
 
     # Apply numeric slice selections, excluding active axes
-    # IMPORTANT: Also include NaN values to avoid filtering out modules that don't have this parameter
+    # IMPORTANT: Also include NaN values to avoid filtering out optimizers that don't have this parameter
     if slice_sliders_form is not None:
         for col_name, val in slice_sliders_form.value.items():
             if col_name not in active_axes and val is not None:
-                # Include both exact matches AND NaN values (for modules that don't have this parameter)
+                # Include both exact matches AND NaN values (for optimizers that don't have this parameter)
                 filtered_df = filtered_df[
                     (filtered_df[col_name] == val) | filtered_df[col_name].isna()
                 ]
@@ -408,14 +407,9 @@ def _(
                     )
             custom_legend = mo.hstack(legend_items, justify="center", wrap=True)
             row1 = mo.hstack([plots.get(plot_titles[0]), plots.get(plot_titles[1])], justify="center")
-            row2 = mo.hstack([plots.get(plot_titles[2]), plots.get(plot_titles[3])], justify="center")
+            row2 = mo.hstack([plots.get(plot_titles[2])], justify="center")
             plot = mo.vstack([custom_legend, row1, row2], align="center")
     plot
-    return
-
-
-@app.cell
-def _():
     return
 
 

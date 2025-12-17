@@ -2,8 +2,7 @@
 Pytest-native testing utilities for tunalab.
 
 This package provides pure helper functions and fixture factories for testing
-neural network modules, optimizers, and training loops. Unlike the old validation
-package, these are designed to work with standard pytest patterns.
+neural network modules, optimizers, and training loops.
 
 Usage:
     # In your test file:
@@ -42,11 +41,10 @@ from tunalab.testing.train_loops import (
 )
 
 # Benchmarking helpers
-from tunalab.testing.benchmarking import (
+from tunalab.benchmark_modules import (
     measure_performance,
-)
-from tunalab.testing.benchmark_runner import (
-    BenchmarkRunner,
+    ModuleBenchmarkRunner,
+    OptimizerBenchmarkRunner,
 )
 
 # Fixture factories
@@ -74,8 +72,8 @@ __all__ = [
     "run_training_smoke_test",
     "run_base_loop_compliance_test",
     # Benchmarking
-    "measure_performance",
-    "BenchmarkRunner",
+    "ModuleBenchmarkRunner",
+    "OptimizerBenchmarkRunner",
     # Fixtures
     "make_device_fixture",
     "make_dtype_fixture",

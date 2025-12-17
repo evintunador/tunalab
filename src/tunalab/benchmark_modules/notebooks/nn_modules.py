@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.14.10"
+__generated_with = "0.18.0"
 app = marimo.App(width="full")
 
 
@@ -13,25 +13,27 @@ def _():
     import glob
     import os
     from tunalab.paths import get_artifact_root
-    return glob, go, mo, os, pd, px, get_artifact_root
+    return get_artifact_root, glob, go, mo, os, pd, px
 
 
 @app.cell
 def _(mo):
-    mo.md("""# Optimizer Benchmark Results Viewer""")
+    mo.md("""
+    # Benchmark Results Viewer
+    """)
     return
 
 
 @app.cell
-def _(glob, mo, os, get_artifact_root):
+def _(get_artifact_root, glob, mo, os):
     plot_titles = [
-        "avg_step_time_ms",
-        "loss_reduction_pct",
-        "accuracy_improvement_pct",
-        "loss_reduction_per_ms",
+        "Forward Time (ms)",
+        "Backward Time (ms)",
+        "Forward Peak Memory (GB)",
+        "Backward Peak Memory (GB)",
     ]
 
-    bench_dir = get_artifact_root() / "optimizers"
+    bench_dir = get_artifact_root() / "nn_modules"
     csv_files = glob.glob(str(bench_dir / '*.csv'))
 
     if not csv_files:
@@ -69,9 +71,9 @@ def _(csv_multiselector, dfs, os, pd):
     else:
         processed_dfs = []
         for path, single_df in zip(csv_multiselector.value, dfs):
-            # Extract optimizer name from filename, e.g., 'Muon_mps.csv' -> 'Muon'
-            optimizer_name = os.path.basename(path).split('_')[0]
-            single_df['optimizer'] = optimizer_name
+            # Extract module name from filename, e.g., 'MLP_mps.csv' -> 'MLP'
+            module_name = os.path.basename(path).split('_')[0]
+            single_df['module'] = module_name
             processed_dfs.append(single_df)
         del path, single_df
 
@@ -102,7 +104,7 @@ def _(df, dfs, mo):
         # optional second x-axis. if equals the first or "None", then 2d plot later instead of 3d
         x_axis_dropdown_2 = mo.ui.dropdown(
             options=["None"] + x_axis_options,
-            label="Optional second x-axis: ",
+            label="Optoinal second x-axis: ",
             value="None",
         )
     mo.vstack([x_axis_dropdown, x_axis_dropdown_2]) if x_axis_dropdown else None
@@ -114,11 +116,11 @@ def _(df, dfs, mo):
     if not dfs:
         filters_form = mo.md("No CSVs selected. Please select one or more benchmark CSVs from the dropdown above.")
     else:
-        # Identify columns to create filters for. This will now include 'optimizer'.
+        # Identify columns to create filters for. This will now include 'module'.
         cols_to_filter = [
             col for col in df.columns 
             if (
-                col not in ['value', 'measurement', 'optimizer'] 
+                col not in ['value', 'measurement', 'module'] 
                 and df[col].dtype == 'object'
             )
         ]
@@ -200,11 +202,11 @@ def _(active_axes, df, filters_form, slice_sliders_form):
                 filtered_df = filtered_df[filtered_df[column].isna()]
 
     # Apply numeric slice selections, excluding active axes
-    # IMPORTANT: Also include NaN values to avoid filtering out optimizers that don't have this parameter
+    # IMPORTANT: Also include NaN values to avoid filtering out modules that don't have this parameter
     if slice_sliders_form is not None:
         for col_name, val in slice_sliders_form.value.items():
             if col_name not in active_axes and val is not None:
-                # Include both exact matches AND NaN values (for optimizers that don't have this parameter)
+                # Include both exact matches AND NaN values (for modules that don't have this parameter)
                 filtered_df = filtered_df[
                     (filtered_df[col_name] == val) | filtered_df[col_name].isna()
                 ]
@@ -412,5 +414,11 @@ def _(
     return
 
 
+@app.cell
+def _():
+    return
+
+
 if __name__ == "__main__":
     app.run()
+
