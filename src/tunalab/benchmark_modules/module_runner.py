@@ -14,7 +14,7 @@ from tunalab.paths import get_artifact_root
 
 class ModuleBenchmarkRunner:
     def __init__(self, output_dir: Optional[Path] = None):
-        self.output_dir = output_dir or (get_artifact_root() / "nn_modules")
+        self.output_dir = output_dir or (get_artifact_root() / "modules")
         self.output_dir.mkdir(parents=True, exist_ok=True)
     
     def run_module_benchmark(

@@ -21,7 +21,7 @@ from tunalab.testing.device import (
 )
 
 # NN Module testing helpers
-from tunalab.testing.nn_modules import (
+from tunalab.testing.modules import (
     ComparisonResult,
     compare_modules,
     get_tolerances_for_dtype,

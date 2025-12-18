@@ -8,7 +8,7 @@ def get_notebook_paths():
     import tunalab.benchmark_modules.notebooks as notebooks_module
     notebooks_dir = Path(notebooks_module.__file__).parent
     return {
-        'nn-modules': notebooks_dir / 'nn_modules.py',
+        'modules': notebooks_dir / 'modules.py',
         'optimizers': notebooks_dir / 'optimizers.py',
     }
 
@@ -16,7 +16,7 @@ def get_notebook_paths():
 def list_benchmarks():
     """List available benchmark notebooks."""
     print("Available benchmarks:")
-    for name in ['nn-modules', 'optimizers']:
+    for name in ['modules', 'optimizers']:
         print(f"  - {name}")
 
 

@@ -4,7 +4,7 @@ import time
 import torch
 import torch.nn as nn
 
-from tunalab.testing.nn_modules import get_total_loss
+from tunalab.testing.modules import get_total_loss
 
 
 def measure_performance(
