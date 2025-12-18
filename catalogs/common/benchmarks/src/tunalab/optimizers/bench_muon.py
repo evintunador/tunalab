@@ -1,4 +1,4 @@
-from tunalab.benchmark_modules import OptimizerBenchmarkRunner
+from tunalab.benchmarking import OptimizerBenchmarkRunner
 from tunalab.optimizers.muon import MuonTestAdapter
 
 

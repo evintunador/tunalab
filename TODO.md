@@ -13,4 +13,4 @@
 - [ ] 
 
 # not-important / not-urgent
-- [ ] 
+- [ ] make the benchmarking system pytest-like or something instead of these manual calls to the benchmark runners

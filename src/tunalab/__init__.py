@@ -10,6 +10,7 @@ from tunalab.device import get_default_device, get_available_devices, to_device,
 from tunalab.distributed import barrier, is_main_process, DistributedManager
 from tunalab.smart_train import smart_train
 from tunalab.evaluation import EvaluationRunner, register_handler
+from tunalab.benchmarking import ModuleBenchmarkRunner, OptimizerBenchmarkRunner
 from tunalab import tracking
 
 # Protocols
@@ -24,5 +25,6 @@ __all__ = [
     "smart_train",
     "DaemonHook", "StorageBackend", "LLMClient", "TrainingLoop",
     "EvaluationRunner", "register_handler", 
+    "ModuleBenchmarkRunner", "OptimizerBenchmarkRunner",
     "tracking",
 ]

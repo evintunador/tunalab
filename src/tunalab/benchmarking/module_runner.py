@@ -7,7 +7,7 @@ import torch.nn as nn
 import pandas as pd
 from tqdm import tqdm
 
-from tunalab.benchmark_modules.measurements import measure_performance
+from tunalab.benchmarking.measurements import measure_performance
 from tunalab.testing.device import to_device, to_dtype
 from tunalab.paths import get_artifact_root
 

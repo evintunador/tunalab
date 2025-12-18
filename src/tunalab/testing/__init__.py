@@ -41,7 +41,7 @@ from tunalab.testing.train_loops import (
 )
 
 # Benchmarking helpers
-from tunalab.benchmark_modules import (
+from tunalab.benchmarking import (
     measure_performance,
     ModuleBenchmarkRunner,
     OptimizerBenchmarkRunner,

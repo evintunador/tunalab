@@ -5,7 +5,7 @@ from pathlib import Path
 
 def get_notebook_paths():
     """Get paths to benchmark notebooks."""
-    import tunalab.benchmark_modules.notebooks as notebooks_module
+    import tunalab.benchmarking.notebooks as notebooks_module
     notebooks_dir = Path(notebooks_module.__file__).parent
     return {
         'modules': notebooks_dir / 'modules.py',

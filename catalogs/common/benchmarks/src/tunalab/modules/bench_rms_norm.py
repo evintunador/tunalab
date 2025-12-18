@@ -1,6 +1,6 @@
 import torch
 
-from tunalab.benchmark_modules import ModuleBenchmarkRunner
+from tunalab.benchmarking import ModuleBenchmarkRunner
 from tunalab.modules.norms.rms_norm import RMSNorm
 
 
