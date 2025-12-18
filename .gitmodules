@@ -1,3 +1,6 @@
 [submodule "experiments/nanoGPT"]
 	path = experiments/nanoGPT
 	url = git@github.com:evintunador/nanoGPT.git
+[submodule "experiments/dagseq2dagseq"]
+	path = experiments/dagseq2dagseq
+	url = git@github.com:evintunador/dagseq2dagseq.git
