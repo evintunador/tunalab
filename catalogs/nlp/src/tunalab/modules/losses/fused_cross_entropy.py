@@ -73,5 +73,10 @@ class FusedLinearCELoss(torch.nn.Module):
         )
 
     def forward(self, x, y):
+        # Liger expects 2-D inputs (BT, H) and (BT,).  Flatten transparently
+        # so callers can pass the natural (B, T, H) / (B, T) shapes.
+        if x.ndim == 3:
+            x = x.view(-1, x.size(-1))
+            y = y.view(-1)
         w = self.lin.weight if self.lin is not None else self.weight
         return self.ce_loss(w, x, y)
