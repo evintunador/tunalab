@@ -20,9 +20,10 @@ def run_training(
     optimizer.zero_grad(set_to_none=True)
 
     pbar = None
-    is_map_style = not isinstance(train_loader.dataset, IterableDataset)
-    if use_tqdm and is_map_style:
-        pbar = tqdm_auto(desc="Training", leave=False, total=len(train_loader))
+    if use_tqdm:
+        is_map_style = not isinstance(train_loader.dataset, IterableDataset)
+        total = len(train_loader) if is_map_style else None
+        pbar = tqdm_auto(desc="Training", leave=False, total=total)
 
     try:
         for batch in train_loader:
@@ -32,11 +33,11 @@ def run_training(
             optimizer.step()
             optimizer.zero_grad(set_to_none=True)
 
-            if pbar:
+            if pbar is not None:
                 pbar.update(1)
                 pbar.set_postfix(loss=f"{loss.item():.4f}")
     finally:
-        if pbar:
+        if pbar is not None:
             pbar.close()
 
     return {"model": model}
