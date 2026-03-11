@@ -7,7 +7,10 @@ from tunalab.configuration import Config, compose_config, load_config
 from tunalab.checkpointer import save_checkpoint, load_checkpoint
 from tunalab.reproducibility import ReproducibilityManager
 from tunalab.device import get_default_device, get_available_devices, to_device, to_dtype
-from tunalab.distributed import barrier, is_main_process, DistributedManager
+from tunalab.distributed import (
+    barrier, cpu_barrier, setup_signal_handlers,
+    is_main_process, DistributedManager,
+)
 from tunalab.smart_train import smart_train
 from tunalab.evaluation import EvaluationRunner, register_handler
 from tunalab.benchmarking import ModuleBenchmarkRunner, OptimizerBenchmarkRunner
@@ -21,10 +24,11 @@ __all__ = [
     "save_checkpoint", "load_checkpoint",
     "ReproducibilityManager",
     "get_default_device", "get_available_devices", "to_device", "to_dtype",
-    "barrier", "is_main_process", "DistributedManager",
+    "barrier", "cpu_barrier", "setup_signal_handlers",
+    "is_main_process", "DistributedManager",
     "smart_train",
     "DaemonHook", "StorageBackend", "LLMClient", "TrainingLoop",
-    "EvaluationRunner", "register_handler", 
+    "EvaluationRunner", "register_handler",
     "ModuleBenchmarkRunner", "OptimizerBenchmarkRunner",
     "tracking",
 ]

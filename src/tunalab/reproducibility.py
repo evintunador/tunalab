@@ -553,9 +553,20 @@ class ReproducibilityManager:
 
         self.output_dir = os.path.abspath(output_dir)
 
+        # Unique subdirectory for this process's reproducibility artifacts
+        self.hostname = socket.gethostname()
+        self.pid = os.getpid()
+        self._repro_subdir_name = f"node_{self.hostname}_pid_{self.pid}"
+        self._repro_dir = os.path.join(self.output_dir, "reproducibility", self._repro_subdir_name)
+
+        # Barrier BEFORE the main-process check: without this, non-main ranks
+        # race ahead to os.makedirs(self._repro_dir) and populate the
+        # reproducibility/ directory before the main rank checks whether it is
+        # empty, causing a spurious "already exists" error in DDP runs.
+        barrier()
+
         # Guard against reusing an existing output directory that contains reproducibility artifacts
         if self._is_main_process_val and os.path.exists(self.output_dir):
-            # Check for existing "reproducibility" directory
             repro_dir_check = os.path.join(self.output_dir, "reproducibility")
             if os.path.exists(repro_dir_check) and os.listdir(repro_dir_check):
                 raise ValueError(
@@ -563,18 +574,6 @@ class ReproducibilityManager:
                     "To ensure reproducibility, please use a new, unique output directory for each run, "
                     "or ensure the target directory does not contain previous reproducibility artifacts."
                 )
-
-        # Unique subdirectory for this process's reproducibility artifacts
-        self.hostname = socket.gethostname()
-        self.pid = os.getpid()
-        self._repro_subdir_name = f"node_{self.hostname}_pid_{self.pid}"
-        self._repro_dir = os.path.join(self.output_dir, "reproducibility", self._repro_subdir_name)
-
-        # Ensure directories exist (all processes)
-        # Wait for the main process to perform its checks and create the directory structure
-        # This prevents a race condition where non-main processes create the directory
-        # before the main process checks for its existence/emptiness.
-        barrier()
         
         os.makedirs(self.output_dir, exist_ok=True)
         os.makedirs(self._repro_dir, exist_ok=True)
@@ -594,35 +593,30 @@ class ReproducibilityManager:
         self._distributed_topology: Optional[Dict[str, Any]] = None
 
         self._get_git_info()
-        
-        # Save artifacts for ALL processes
-        # Save canonical git_info.json inside the reproducibility directory
+
+        # Save artifacts for this process's reproducibility subdirectory
         git_info_file = os.path.join(self._repro_dir, "git_info.json")
         with open(git_info_file, "w") as f:
             json.dump(self.git_info, f, indent=2)
         logger.info(f"Saved git info to: {git_info_file}")
 
-        # Capture and persist software environment information
         self._software_environment = get_software_environment_info()
         software_env_file = os.path.join(self._repro_dir, "software_environment.json")
         with open(software_env_file, "w") as f:
             json.dump(self._software_environment, f, indent=2)
         logger.info(f"Saved software environment info to: {software_env_file}")
 
-        # Capture and persist runtime environment information (devices + distributed)
         self._runtime_environment = get_runtime_environment_info()
         runtime_env_file = os.path.join(self._repro_dir, "runtime_environment.json")
         with open(runtime_env_file, "w") as f:
             json.dump(self._runtime_environment, f, indent=2)
         logger.info(f"Saved runtime environment info to: {runtime_env_file}")
 
-        # Capture and persist initial RNG state for reproducibility
         self._initial_rng_state = get_rng_state()
         rng_state_file = os.path.join(self._repro_dir, "rng_state_initial.pt")
         torch.save(self._initial_rng_state, rng_state_file)
         logger.info(f"Saved initial RNG state to: {rng_state_file}")
 
-        # Capture and persist run-time invocation details (argv + filtered env)
         self._run_invocation = get_run_invocation_info()
         run_invocation_file = os.path.join(self._repro_dir, "run_invocation.json")
         with open(run_invocation_file, "w") as f:
