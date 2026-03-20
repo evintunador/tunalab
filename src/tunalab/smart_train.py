@@ -936,7 +936,7 @@ def _find_overlapping_feature_groups(candidate_features: Set[str], feature_to_kw
         # Start a new group with the next feature in sorted order
         current_feature = remaining_features.pop(0)
         current_group = {current_feature}
-        current_kwargs = feature_kwargs_map[current_feature]
+        current_kwargs = set(feature_kwargs_map[current_feature])  # copy, not reference
         
         # Find all features that share any kwargs with this group
         changed = True
