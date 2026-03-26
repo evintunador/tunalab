@@ -53,7 +53,7 @@ class TorchLinearCELoss(torch.nn.Module):
 
 
 class FusedLinearCELoss(torch.nn.Module):
-    def __init__(self, D: int, V: int, dtype: torch.dtype, ignore_index: int = -100, weight: torch.Tensor = None):
+    def __init__(self, D: int, V: int, dtype: torch.dtype, ignore_index: int = -100, weight: torch.Tensor = None, softcap: float = None):
         super().__init__()
         if not LIGER_AVAILABLE:
             raise ImportError("liger_kernel is not installed")
@@ -69,7 +69,7 @@ class FusedLinearCELoss(torch.nn.Module):
             self.lin = None
 
         self.ce_loss = LigerFusedLinearCrossEntropyLoss(
-            ignore_index=ignore_index, reduction="mean"
+            ignore_index=ignore_index, reduction="mean", softcap=softcap,
         )
 
     def forward(self, x, y):
