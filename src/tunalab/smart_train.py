@@ -528,11 +528,21 @@ def compile_loop(
             import hashlib
             cache_key = hashlib.md5(str(code_path).encode()).hexdigest()[:8]
             module = import_module_from_path(f"cached_loop_{cache_key}", code_path)
+            cached_features = getattr(module, '__atomic_features__', None)
+            clean_requested = sorted(f.replace('.py', '') for f in atomic_features)
+            if cached_features is not None and sorted(cached_features) != clean_requested:
+                logger.warning(
+                    "Cached loop feature mismatch: file has %s, requested %s. Recompiling.",
+                    sorted(cached_features), clean_requested,
+                )
+                raise RuntimeError(
+                    f"feature mismatch: cached {sorted(cached_features)} != requested {clean_requested}"
+                )
             logger.debug("✓ Successfully loaded cached loop")
             logger.info(f"Using cached compiled loop at {code_path}")
             return {
-                "name": name, 
-                "code_path": str(code_path), 
+                "name": name,
+                "code_path": str(code_path),
                 "atomic_features": atomic_features,
             }
         except Exception as e:
