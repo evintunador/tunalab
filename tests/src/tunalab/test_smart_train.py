@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 from importlib import reload
 
 from tunalab.testing import SimpleTestTrainingModel, get_available_devices
-from tunalab.smart_train import smart_train
+from tunalab.smart_train import smart_train, select_features_from_kwargs
 
 AVAILABLE_DEVICES = get_available_devices()
 
@@ -100,14 +100,124 @@ def test_smart_train_unknown_kwargs():
 @pytest.mark.parametrize("device", AVAILABLE_DEVICES)
 def test_smart_train_none_filtering(device: str):
     """Test that smart_train filters out None values."""
-    
+
     model, optimizer, dataloader = _create_test_data(device)
-    
+
     # Should work the same as no additional features
     result = smart_train(
         model, optimizer, dataloader,
         accum_steps=None, val_loader=None
     )
-    
+
     assert isinstance(result, dict)
     assert 'model' in result
+
+
+# ---------------------------------------------------------------------------
+# Unit tests for select_features_from_kwargs
+# ---------------------------------------------------------------------------
+
+_SENTINEL = object()  # stand-in for val_loader (just needs to be non-None)
+
+
+def test_select_features_checkpoint_best_model_selected():
+    """Full training kwargs must select checkpoint_best_model, not just device+multi_epoch.
+
+    This is the regression test for the broken _select_most_specific_from_group
+    logic that dropped checkpoint_best_model whenever every kwarg in the
+    transitive overlap group was shared by multiple features.
+    """
+    kwargs = {
+        'enable_logging': True,
+        'save_best_model': True,
+        'val_loader': _SENTINEL,
+        'val_interval': 50,
+        'output_dir': '/tmp',
+        'device': 'cuda',
+        'use_tqdm': True,
+        'num_epochs': 1,
+        'accum_steps': 1,
+    }
+    features = select_features_from_kwargs(kwargs)
+    assert 'checkpoint_best_model' in features, (
+        f"checkpoint_best_model missing from {features}"
+    )
+
+
+def test_select_features_validation_subsumed_by_checkpoint():
+    """validation must not appear alongside checkpoint_best_model (it is subsumed)."""
+    kwargs = {
+        'save_best_model': True,
+        'val_loader': _SENTINEL,
+        'val_interval': 10,
+        'output_dir': '/tmp',
+    }
+    features = select_features_from_kwargs(kwargs)
+    assert 'checkpoint_best_model' in features
+    assert 'validation' not in features, (
+        f"validation should be subsumed by checkpoint_best_model, got {features}"
+    )
+
+
+def test_select_features_validation_only_without_save_best_model():
+    """Without save_best_model, validation (not checkpoint_best_model) should be selected."""
+    kwargs = {
+        'val_loader': _SENTINEL,
+        'val_interval': 10,
+        'device': 'cuda',
+    }
+    features = select_features_from_kwargs(kwargs)
+    assert 'validation' in features
+    assert 'checkpoint_best_model' not in features
+
+
+def test_select_features_superset_subsumes_subsets():
+    """A more-specific feature (superset kwargs) must subsume all less-specific ones.
+
+    Mirrors the real bucket_state_checkpoint > checkpoint_best_model > validation
+    hierarchy using a mock discovery so the test is self-contained in tunalab.
+    """
+    from unittest.mock import patch
+
+    fake_features = {
+        'feat_small': {'k1', 'k2'},           # validation-like
+        'feat_medium': {'k1', 'k2', 'k3'},    # checkpoint_best_model-like
+        'feat_large': {'k1', 'k2', 'k3', 'k4'},  # bucket_state_checkpoint-like
+        'feat_orthogonal': {'k5'},             # unrelated — should still appear
+    }
+    fake_kwarg_to_features = {}
+    for feat, ks in fake_features.items():
+        for k in ks:
+            fake_kwarg_to_features.setdefault(k, set()).add(feat)
+
+    user_kwargs = {'k1': 1, 'k2': 2, 'k3': 3, 'k4': 4, 'k5': 5}
+
+    with patch('tunalab.smart_train.discover_atomic_feature_mappings',
+               return_value=(fake_features, fake_kwarg_to_features)):
+        features = select_features_from_kwargs(user_kwargs)
+
+    assert 'feat_large' in features
+    assert 'feat_orthogonal' in features
+    assert 'feat_medium' not in features, "feat_medium should be subsumed by feat_large"
+    assert 'feat_small' not in features, "feat_small should be subsumed by feat_large"
+
+
+def test_select_features_idempotent():
+    """Calling select_features_from_kwargs twice must return identical results.
+
+    Regression test for the 133542f mutation bug where _find_overlapping_feature_groups
+    mutated the feature_to_kwargs sets in-place, causing different results on
+    repeated calls.
+    """
+    kwargs = {
+        'save_best_model': True,
+        'val_loader': _SENTINEL,
+        'val_interval': 10,
+        'output_dir': '/tmp',
+        'device': 'cuda',
+    }
+    result1 = select_features_from_kwargs(kwargs)
+    result2 = select_features_from_kwargs(kwargs)
+    assert result1 == result2, (
+        f"select_features_from_kwargs is not idempotent: {result1} vs {result2}"
+    )
