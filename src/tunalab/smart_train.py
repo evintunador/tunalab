@@ -1036,55 +1036,69 @@ def _select_most_specific_from_group(group: Set[str], feature_to_kwargs: Dict[st
 
 def select_features_from_kwargs(user_kwargs: Dict[str, Any]) -> List[str]:
     """
-    Select atomic features based on user-provided kwargs using subset-based specificity logic.
-    
-    For overlapping features (features that share kwargs), prefers the most specific feature:
-    - The feature with the smallest kwarg set that the user has satisfied
-    - This ensures we pick 'validation' over 'early_stopping' when user only provides val_loader
-    
+    Select atomic features based on user-provided kwargs.
+
+    Algorithm:
+    1. Select every feature whose complete kwarg set is a subset of the
+       user-provided kwargs (the feature is "fully satisfied").
+    2. Drop any feature A that is subsumed by a more specific selected
+       feature B: if feature_to_kwargs[A] is a strict subset of
+       feature_to_kwargs[B], A is redundant because B already provides
+       A's functionality.
+
+    Examples:
+      - User passes val_loader + val_interval + save_best_model + output_dir:
+        both 'validation' and 'checkpoint_best_model' are fully satisfied, but
+        'validation' is subsumed by 'checkpoint_best_model' → only
+        'checkpoint_best_model' is returned.
+      - User also passes bucket_state_fn: 'bucket_state_checkpoint' is
+        additionally satisfied and subsumes 'checkpoint_best_model' →
+        only 'bucket_state_checkpoint' is returned.
+      - User passes val_loader but not save_best_model: only 'validation'
+        is fully satisfied → 'validation' is returned.
+
     Args:
         user_kwargs: Dictionary of kwargs provided by the user
-        
+
     Returns:
-        List of feature names to include in the compiled loop
-        
+        Sorted list of feature names to include in the compiled loop
+
     Raises:
         ValueError: If user provides kwargs that don't match any known features
     """
     feature_to_kwargs, kwarg_to_features = discover_atomic_feature_mappings()
-    
-    # Find all user kwargs that match known feature kwargs
+
     user_kwarg_set = set(user_kwargs.keys())
     known_kwargs = set(kwarg_to_features.keys())
-    
-    # Check for unknown kwargs
+
     unknown_kwargs = user_kwarg_set - known_kwargs
     if unknown_kwargs:
-        available_kwargs = sorted(known_kwargs)
         raise ValueError(
             f"Unknown kwargs provided: {sorted(unknown_kwargs)}. "
-            f"Available kwargs: {available_kwargs}"
+            f"Available kwargs: {sorted(known_kwargs)}"
         )
-    
-    # Find features that have any overlap with user kwargs
-    candidate_features = set()
-    for user_kwarg in user_kwarg_set:
-        if user_kwarg in kwarg_to_features:
-            candidate_features.update(kwarg_to_features[user_kwarg])
-    
-    if not candidate_features:
+
+    # Step 1: features whose entire kwarg set is covered by the user.
+    fully_satisfied = [
+        feature
+        for feature, fkwargs in feature_to_kwargs.items()
+        if fkwargs and fkwargs <= user_kwarg_set
+    ]
+
+    if not fully_satisfied:
         return []
-    
-    # Group overlapping features
-    overlapping_groups = _find_overlapping_feature_groups(candidate_features, feature_to_kwargs)
-    
-    # Select most specific feature from each group
-    selected_features = []
-    for group in overlapping_groups:
-        group_selection = _select_most_specific_from_group(group, feature_to_kwargs, user_kwarg_set)
-        selected_features.extend(group_selection)
-    
-    return sorted(selected_features)
+
+    # Step 2: drop features subsumed by a more specific fully-satisfied feature.
+    # If feature A's kwargs are a strict subset of feature B's kwargs, and both
+    # are selected, A is redundant — B already covers A's functionality.
+    to_drop = set()
+    for a in fully_satisfied:
+        for b in fully_satisfied:
+            if a != b and feature_to_kwargs[a] < feature_to_kwargs[b]:
+                to_drop.add(a)
+                break
+
+    return sorted(f for f in fully_satisfied if f not in to_drop)
 
 
 def smart_train(
