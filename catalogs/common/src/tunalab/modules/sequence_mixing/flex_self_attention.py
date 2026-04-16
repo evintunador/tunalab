@@ -4,7 +4,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from torch.nn.attention.flex_attention import BlockMask, flex_attention
+from torch.nn.attention.flex_attention import BlockMask
+from torch.nn.attention.flex_attention import flex_attention as _flex_attention_raw
+flex_attention = torch.compile(_flex_attention_raw, dynamic=True, mode="default")
 
 from tunalab.modules.channel_mixing.fp8_linear import FP8Linear
 from tunalab.modules.norms.rms_norm import RMSNorm
