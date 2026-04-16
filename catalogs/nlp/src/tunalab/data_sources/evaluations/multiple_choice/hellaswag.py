@@ -165,15 +165,15 @@ class HellaSwagDataset(Dataset):
                     return MultipleChoiceItem(
                         context=example["ctx"],
                         choices=example["endings"],
-                        label=example["label"],
+                        label=int(example["label"]),  # HF returns label as str
                     )
             raise IndexError(f"Index {idx} out of range")
         
         example = self.data[idx]
         return MultipleChoiceItem(
             context=example["ctx"],
-            choices=example["endings"], 
-            label=example["label"],
+            choices=example["endings"],
+            label=int(example["label"]),  # HF returns label as str; cast to int
         )
     
     def _save_to_cache(self):
