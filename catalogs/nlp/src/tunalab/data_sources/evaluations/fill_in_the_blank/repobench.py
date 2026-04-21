@@ -1,7 +1,7 @@
 """
 RepoBench-C (cross-file next-line completion) dataset for fill-in-the-blank evaluation.
 
-Reference: https://huggingface.co/datasets/Leolty/repobench-python-v1.1
+Reference: https://huggingface.co/datasets/tianyang/repobench_python_v1.1
            (ICLR 2024: Liu et al., "RepoBench: Benchmarking Repository-Level
            Code Auto-Completion Systems")
 
@@ -18,8 +18,10 @@ Context construction: cross-file snippets are concatenated first (separated by
 blank lines), then the current file prefix — mirroring how cross_doc_link models
 see auxiliary documents before the active document.
 
-Note: as of 2026-04 this dataset is not accessible from all clusters. A
-DatasetNotFoundError at load time will propagate with a clear message.
+Schema (tianyang/repobench_python_v1.1):
+  context      — list of {'identifier': str, 'path': str, 'snippet': str}
+  cropped_code — current file prefix up to the target line
+  next_line    — ground truth next line to predict
 """
 import os
 from enum import Enum
@@ -28,6 +30,9 @@ from typing import Optional
 from torch.utils.data import Dataset
 
 from tunalab.evaluations.fill_in_the_blank import FillInTheBlankItem
+
+#: HuggingFace repo ID for RepoBench Python v1.1 (moved from Leolty/ to tianyang/).
+REPOBENCH_HF_REPO = "tianyang/repobench_python_v1.1"
 
 
 class Split(Enum):
@@ -59,7 +64,7 @@ class RepoBenchDataset(Dataset):
             cache_dir = os.path.join("data", ".cache", "repobench")
 
         raw = load_dataset(
-            "Leolty/repobench-python-v1.1",
+            REPOBENCH_HF_REPO,
             split=split.value,
             cache_dir=cache_dir,
         )
@@ -70,8 +75,9 @@ class RepoBenchDataset(Dataset):
             if not next_line.strip():
                 continue
 
-            cross_snippets  = ex.get("cross_file_context", [])
-            current_prefix  = ex.get("file_context", "")
+            # context is a list of {'identifier', 'path', 'snippet'} dicts.
+            cross_snippets = [c["snippet"] for c in ex.get("context", []) if c.get("snippet")]
+            current_prefix = ex.get("cropped_code", "")
 
             if cross_snippets:
                 context = "\n\n".join(cross_snippets) + "\n\n" + current_prefix
