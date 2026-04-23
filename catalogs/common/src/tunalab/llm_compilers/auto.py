@@ -25,8 +25,9 @@ def get_default_llm_client() -> Optional[LLMClient]:
     """
     use_bedrock = os.getenv("CLAUDE_CODE_USE_BEDROCK", "").strip() in ("1", "true", "yes")
     has_aws_creds = bool(os.getenv("AWS_ACCESS_KEY_ID"))
+    has_bearer_token = bool(os.getenv("AWS_BEARER_TOKEN_BEDROCK"))
 
-    if use_bedrock or has_aws_creds:
+    if use_bedrock or has_aws_creds or has_bearer_token:
         try:
             from tunalab.llm_compilers.bedrock import BedrockLLM
             return BedrockLLM()

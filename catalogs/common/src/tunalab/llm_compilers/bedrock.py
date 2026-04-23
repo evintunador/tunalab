@@ -49,11 +49,15 @@ class BedrockLLM:
         if resolved_region:
             os.environ["AWS_REGION_NAME"] = resolved_region
 
-        # Fail early if credentials are missing.
-        if not os.getenv("AWS_ACCESS_KEY_ID"):
+        # Bearer token auth (Claude Code / SSO-style) takes priority over
+        # static key credentials.
+        self._bearer_token = os.getenv("AWS_BEARER_TOKEN_BEDROCK")
+
+        # Fail early if no credentials at all.
+        if not self._bearer_token and not os.getenv("AWS_ACCESS_KEY_ID"):
             raise ValueError(
                 "AWS credentials not found. Set AWS_ACCESS_KEY_ID / "
-                "AWS_SECRET_ACCESS_KEY (and optionally AWS_SESSION_TOKEN) "
+                "AWS_SECRET_ACCESS_KEY, or AWS_BEARER_TOKEN_BEDROCK, "
                 "before using BedrockLLM."
             )
 
@@ -62,6 +66,7 @@ class BedrockLLM:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
+        # litellm auto-reads AWS_BEARER_TOKEN_BEDROCK from the environment.
         resp = completion(model=self.model, messages=messages)
         return strip_code_fences(resp.choices[0].message.content)
 
