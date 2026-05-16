@@ -25,8 +25,9 @@ def _eval_loss(model: nn.Module, loader) -> float:
     local_loss = total / max(count, 1)
 
     # Average across ranks so all processes see the same validation number.
+    # Tensor must be on CUDA — NCCL cannot reduce CPU tensors.
     if dist.is_available() and dist.is_initialized():
-        t = torch.tensor([local_loss, float(count)], dtype=torch.float64)
+        t = torch.tensor([local_loss, float(count)], dtype=torch.float64, device="cuda")
         dist.all_reduce(t, op=dist.ReduceOp.SUM)
         # Weighted average: sum(loss*count) / sum(count)
         global_loss = t[0].item() / max(t[1].item(), 1.0)
