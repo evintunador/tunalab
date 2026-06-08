@@ -214,14 +214,25 @@ def update_config_from_args(config: Config, args: List[str], argparse_namespace:
                 else:
                     value = "true" # Treat as flag -> true
 
-            # Type conversion
-            try:
-                value = int(value)
-            except (ValueError, TypeError):
+            # Type conversion (order: int → float → bool → JSON/list/dict → string)
+            if isinstance(value, str):
                 try:
-                    value = float(value)
+                    value = int(value)
                 except (ValueError, TypeError):
-                    value = _str_to_bool(value)
+                    try:
+                        value = float(value)
+                    except (ValueError, TypeError):
+                        bool_value = _str_to_bool(value)
+                        if isinstance(bool_value, bool):
+                            value = bool_value
+                        else:
+                            import json
+                            try:
+                                parsed = json.loads(value)
+                                if isinstance(parsed, (list, dict)):
+                                    value = parsed
+                            except (json.JSONDecodeError, ValueError):
+                                pass
             
             overrides[key] = value
         i += 1
