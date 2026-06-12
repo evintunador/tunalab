@@ -229,7 +229,7 @@ def update_config_from_args(config: Config, args: List[str], argparse_namespace:
                             import json
                             try:
                                 parsed = json.loads(value)
-                                if isinstance(parsed, (list, dict)):
+                                if isinstance(parsed, (list, dict)) or parsed is None:
                                     value = parsed
                             except (json.JSONDecodeError, ValueError):
                                 pass
