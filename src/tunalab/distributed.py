@@ -281,8 +281,19 @@ class DistributedManager:
         _DIST_STATE["world_size"] = 1
 
     def _is_dist_env(self) -> bool:
-        """Checks if the script is running in a distributed environment."""
-        return "WORLD_SIZE" in os.environ or "SLURM_NTASKS" in os.environ
+        """Checks if the script is running in a *multi-rank* distributed environment.
+
+        Gates on the world size, not merely the presence of the env var: ``srun``
+        always sets ``SLURM_NTASKS`` (even ``=1`` for a single-task launch), and a
+        world size of 1 is single-process regardless of launcher. Treating
+        ``SLURM_NTASKS=1`` as distributed would needlessly initialize a process
+        group (and, under bare ``srun``, hang on rendezvous). Only coordinate when
+        there is more than one rank.
+        """
+        world_size = int(
+            os.environ.get("WORLD_SIZE") or os.environ.get("SLURM_NTASKS") or 1
+        )
+        return world_size > 1
 
     def _init_distributed(self) -> None:
         """Sets up the process group and updates shared state."""

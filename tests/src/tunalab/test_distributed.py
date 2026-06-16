@@ -203,6 +203,30 @@ def test_slurm_environment_detection(
 
 
 @mock.patch.dict(os.environ, {
+    # srun always sets SLURM_NTASKS, even for a single-task launch. A world size
+    # of 1 is single-process and must NOT initialize a process group (doing so
+    # under bare srun hangs on rendezvous). Regression test for that bug.
+    "SLURM_PROCID": "0",
+    "SLURM_LOCALID": "0",
+    "SLURM_NTASKS": "1",
+}, clear=True)
+@mock.patch('torch.distributed.is_available', return_value=True)
+@mock.patch('torch.distributed.init_process_group')
+@mock.patch('torch.cuda.is_available', return_value=False)
+def test_slurm_single_task_is_not_distributed(
+    mock_cuda_available, mock_init, mock_available,
+):
+    """SLURM_NTASKS=1 (single-task srun) must run single-process, no process group."""
+    with DistributedManager() as manager:
+        mock_init.assert_not_called()
+        assert not manager.is_distributed
+        assert manager.world_size == 1
+        assert manager.rank == 0
+        assert manager.is_main_process
+    assert not is_initialized()
+
+
+@mock.patch.dict(os.environ, {
     "SLURM_PROCID": "0",
     "SLURM_LOCALID": "0",
     "SLURM_NTASKS": "2",
