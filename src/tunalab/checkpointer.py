@@ -76,7 +76,16 @@ def save_checkpoint(
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
 
-    state = {'metadata': metadata or {}}
+    # Resolve any callable metadata *values* at save time.  This lets callers
+    # supply a live value (e.g. a dataset's current schedule position) as a
+    # zero-arg callable that is evaluated now, instead of a value captured
+    # earlier when the training loop was assembled.  Scoped to metadata values
+    # only — never stateful_objects, since e.g. nn.Module is callable and
+    # calling it would trigger a forward pass.
+    resolved_metadata = {
+        k: (v() if callable(v) else v) for k, v in (metadata or {}).items()
+    }
+    state = {'metadata': resolved_metadata}
     for key, obj in stateful_objects.items():
         if hasattr(obj, 'state_dict'):
             logger.debug(f"Fetching state_dict of '{key}'.")
