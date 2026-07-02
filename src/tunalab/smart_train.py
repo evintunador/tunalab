@@ -477,15 +477,51 @@ def run_base_loop_compliance_test_for_compilation(run_training_fn: Callable, ato
     run_base_loop_compliance_test(run_training_fn, device)
 
 
+def _load_cached_loop(atomic_features: List[str]) -> Optional[str]:
+    """Return the path to a valid cached compiled loop, or None.
+
+    Pure cache lookup — performs NO LLM call and NO compilation, so it is safe
+    to call whether or not an ``llm_client`` is available (e.g. a worker whose
+    environment lacks API/Bedrock credentials).  A cached loop is "valid" only
+    when it exists and its ``__atomic_features__`` marker matches
+    ``atomic_features`` exactly.
+
+    Shared by ``compile_loop`` (its cached-success path) and ``smart_train``
+    (its no-client fast path) so the two cannot drift.
+    """
+    if not atomic_features or len(atomic_features) == 1:
+        return None
+    name = _make_descriptive_name(atomic_features)
+    code_path = get_artifact_root() / "train_loops" / "llm_compiled" / f"{name}.py"
+    if not code_path.exists():
+        return None
+    try:
+        import hashlib
+        cache_key = hashlib.md5(str(code_path).encode()).hexdigest()[:8]
+        module = import_module_from_path(f"cachecheck_{cache_key}", code_path)
+        cached_features = getattr(module, "__atomic_features__", None)
+        clean_requested = sorted(f.replace(".py", "") for f in atomic_features)
+        if cached_features is not None and sorted(cached_features) != clean_requested:
+            logger.warning(
+                "Cached loop feature mismatch: file has %s, requested %s.",
+                sorted(cached_features), clean_requested,
+            )
+            return None
+        return str(code_path)
+    except Exception as e:
+        logger.warning("Failed to load cached loop %s: %s", code_path, e)
+        return None
+
+
 def compile_loop(
     atomic_features: List[str],
     llm: Optional[LLMClient] = None,
-    max_refine_attempts: int = 3, 
+    max_refine_attempts: int = 3,
     max_restarts: int = 3,
 ) -> Dict[str, Any]:
     """
     Main entry: ask LLM for a bespoke training loop combining atomic features, test it, cache it.
-    
+
     Note: This function is designed for combining multiple atomic features. For single features,
     use the atomic feature directly for better performance and reliability.
     """
@@ -518,37 +554,19 @@ def compile_loop(
     logger.debug(f"Generated name: {name}")
     logger.debug(f"Output path: {code_path}")
 
-    # Cached success path
+    # Cached success path — shared with smart_train's no-client fast path.
+    cached_path = _load_cached_loop(atomic_features)
+    if cached_path is not None:
+        logger.info(f"Using cached compiled loop at {cached_path}")
+        return {
+            "name": name,
+            "code_path": cached_path,
+            "atomic_features": atomic_features,
+        }
     if code_path.exists():
-        logger.debug("-" * 40)
-        logger.debug("CACHE CHECK")
-        logger.debug("-" * 40)
-        logger.debug(f"Found existing file at {code_path}")
-        try:
-            import hashlib
-            cache_key = hashlib.md5(str(code_path).encode()).hexdigest()[:8]
-            module = import_module_from_path(f"cached_loop_{cache_key}", code_path)
-            cached_features = getattr(module, '__atomic_features__', None)
-            clean_requested = sorted(f.replace('.py', '') for f in atomic_features)
-            if cached_features is not None and sorted(cached_features) != clean_requested:
-                logger.warning(
-                    "Cached loop feature mismatch: file has %s, requested %s. Recompiling.",
-                    sorted(cached_features), clean_requested,
-                )
-                raise RuntimeError(
-                    f"feature mismatch: cached {sorted(cached_features)} != requested {clean_requested}"
-                )
-            logger.debug("✓ Successfully loaded cached loop")
-            logger.info(f"Using cached compiled loop at {code_path}")
-            return {
-                "name": name,
-                "code_path": str(code_path),
-                "atomic_features": atomic_features,
-            }
-        except Exception as e:
-            logger.debug(f"✗ Failed to load cached loop: {e}")
-            logger.warning(f"Failed to load cached loop {code_path}: {e}")
-            logger.info("Will regenerate...")
+        # Exists but invalid (feature mismatch / import error, already logged) —
+        # fall through and regenerate.
+        logger.info("Cached loop at %s unusable; will regenerate...", code_path)
 
     # Build prompts
     logger.debug("-" * 40)
@@ -1051,9 +1069,6 @@ def select_features_from_kwargs(user_kwargs: Dict[str, Any]) -> List[str]:
         both 'validation' and 'checkpoint_best_model' are fully satisfied, but
         'validation' is subsumed by 'checkpoint_best_model' → only
         'checkpoint_best_model' is returned.
-      - User also passes bucket_state_fn: 'bucket_state_checkpoint' is
-        additionally satisfied and subsumes 'checkpoint_best_model' →
-        only 'bucket_state_checkpoint' is returned.
       - User passes val_loader but not save_best_model: only 'validation'
         is fully satisfied → 'validation' is returned.
 
@@ -1098,7 +1113,27 @@ def select_features_from_kwargs(user_kwargs: Dict[str, Any]) -> List[str]:
                 to_drop.add(a)
                 break
 
-    return sorted(f for f in fully_satisfied if f not in to_drop)
+    selected = sorted(f for f in fully_satisfied if f not in to_drop)
+
+    # Guard against the silent-footgun class: a user passes a kwarg that no
+    # SELECTED feature actually declares, so the behaviour it was meant to enable
+    # is silently dropped.  This happens when a kwarg belongs only to a feature
+    # whose *other* required kwargs are absent (so it is never selected) — the
+    # orphaned kwarg then does nothing.  Warn loudly rather than fail silently.
+    consumed = set().union(*(feature_to_kwargs[f] for f in selected)) if selected else set()
+    dropped = user_kwarg_set - consumed
+    if dropped:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "smart_train: kwarg(s) %s were provided but are NOT consumed by any "
+            "selected feature %s — the behaviour they enable is silently inactive. "
+            "This usually means an incompatible kwarg combination (a kwarg whose "
+            "feature was not selected because its other required kwargs are "
+            "missing). Check your kwargs against the selected features' signatures.",
+            sorted(dropped), selected,
+        )
+
+    return selected
 
 
 def smart_train(
@@ -1203,6 +1238,25 @@ def smart_train(
     logger.info("Multiple features selected. Proceeding with LLM compilation.")
     
     if llm_client is None:
+        # No client to compile with — but if a matching loop was already compiled
+        # and cached, we can run it directly (no LLM needed).  This is the common
+        # case for workers whose environment lacks API/Bedrock credentials (e.g.
+        # ssh/torchrun launches that don't inherit the controller's env): the loop
+        # was compiled once on a credentialed host and cached on shared storage.
+        cached_path = _load_cached_loop(selected_features)
+        if cached_path is not None:
+            logger.info(
+                "No LLM client, but using cached compiled loop at %s", cached_path
+            )
+            import hashlib, time
+            path_hash = hashlib.md5(f"{cached_path}_{time.time()}".encode()).hexdigest()[:8]
+            compiled_module = import_module_from_path(
+                f"smart_cached_loop_{path_hash}", cached_path
+            )
+            return compiled_module.run_training(
+                model, optimizer, train_loader, **filtered_kwargs
+            )
+
         logger.warning("No LLM client provided. Using mock compilation for testing.")
         # For tests, create a mock compiled loop in a temporary directory
         with tempfile.TemporaryDirectory() as tmpdir:

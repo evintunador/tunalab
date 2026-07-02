@@ -221,3 +221,113 @@ def test_select_features_idempotent():
     assert result1 == result2, (
         f"select_features_from_kwargs is not idempotent: {result1} vs {result2}"
     )
+
+
+def test_dropped_kwarg_warns(caplog):
+    """A kwarg consumed by no selected feature must produce a loud warning.
+
+    Guards the silent-footgun class: a user passes a kwarg that no *selected*
+    feature declares, so the behaviour it was meant to enable is silently
+    dropped.  Here ``accum_steps`` selects ``grad_accum`` but ``patience``
+    (an early_stopping kwarg, and early_stopping also needs ``val_loader``) is
+    orphaned — select_features_from_kwargs must warn that it is inactive.
+    """
+    import logging
+    kwargs = {
+        'accum_steps': 2,     # → selects grad_accum
+        'patience': 5,        # early_stopping-only; early_stopping not fully satisfied
+    }
+    with caplog.at_level(logging.WARNING, logger='tunalab.smart_train'):
+        selected = select_features_from_kwargs(kwargs)
+    assert 'grad_accum' in selected
+    assert 'early_stopping' not in selected
+    assert any('patience' in r.message and 'NOT consumed' in r.message
+               for r in caplog.records), "expected a warning about the dropped patience kwarg"
+
+
+def test_no_spurious_dropped_kwarg_warning(caplog):
+    """A clean kwarg set (every kwarg consumed) must NOT warn."""
+    import logging
+    kwargs = {
+        'save_best_model': True,
+        'val_loader': _SENTINEL,       # singular → checkpoint_best_model
+        'val_interval': 10,
+        'output_dir': '/tmp',
+    }
+    with caplog.at_level(logging.WARNING, logger='tunalab.smart_train'):
+        selected = select_features_from_kwargs(kwargs)
+    assert 'checkpoint_best_model' in selected
+    assert not any('NOT consumed' in r.message for r in caplog.records), \
+        "clean kwarg set should not produce a dropped-kwarg warning"
+
+
+def test_load_cached_loop(tmp_path, monkeypatch):
+    """_load_cached_loop returns a matching cached loop and never compiles.
+
+    Regression for the down-node failure: a worker without LLM credentials
+    (llm_client=None) must still run an already-cached multi-feature loop instead
+    of silently falling back to the do-nothing mock loop.
+    """
+    import importlib
+    st = importlib.import_module("tunalab.smart_train")
+
+    features = ["device", "logging", "multi_epoch", "tqdm"]
+    name = st._make_descriptive_name(features)
+
+    # Point the artifact root at a temp dir and plant a cached loop with the
+    # correct __atomic_features__ marker.
+    compiled_dir = tmp_path / "train_loops" / "llm_compiled"
+    compiled_dir.mkdir(parents=True)
+    loop_path = compiled_dir / f"{name}.py"
+    loop_path.write_text(
+        "__atomic_features__ = %r\n"
+        "def run_training(model, optimizer, train_loader, **kwargs):\n"
+        "    return {'model': model, 'ran_cached': True}\n" % features
+    )
+    monkeypatch.setattr(st, "get_artifact_root", lambda: tmp_path)
+
+    # Exact-match feature set → returns the cached path.
+    found = st._load_cached_loop(features)
+    assert found == str(loop_path)
+
+    # Order-independent.
+    assert st._load_cached_loop(list(reversed(features))) == str(loop_path)
+
+    # Feature mismatch / single feature / missing → None (caller falls back).
+    assert st._load_cached_loop(features + ["grad_accum"]) is None
+    assert st._load_cached_loop(["tqdm"]) is None
+    assert st._load_cached_loop(["device", "logging", "nonexistent"]) is None
+
+
+def test_smart_train_uses_cache_without_llm_client(tmp_path, monkeypatch):
+    """With llm_client=None but a matching cached loop present, smart_train runs
+    the cached loop (not the mock no-op)."""
+    import importlib
+    st = importlib.import_module("tunalab.smart_train")
+
+    # The features select_features_from_kwargs picks for these kwargs
+    # (accum_steps→grad_accum, num_epochs→multi_epoch = a 2-feature selection
+    # that goes through the LLM-compile path, not the single-feature shortcut).
+    kwargs = {"accum_steps": 2, "num_epochs": 1}
+    features = select_features_from_kwargs(kwargs)
+    assert len(features) > 1, "test needs a multi-feature selection"
+
+    name = st._make_descriptive_name(features)
+    compiled_dir = tmp_path / "train_loops" / "llm_compiled"
+    compiled_dir.mkdir(parents=True)
+    (compiled_dir / f"{name}.py").write_text(
+        "__atomic_features__ = %r\n"
+        "def run_training(model, optimizer, train_loader, **kwargs):\n"
+        "    return {'model': model, 'ran_cached': True}\n" % sorted(features)
+    )
+    monkeypatch.setattr(st, "get_artifact_root", lambda: tmp_path)
+
+    model = nn.Linear(4, 4)
+    opt = torch.optim.SGD(model.parameters(), lr=0.1)
+    loader = DataLoader(TensorDataset(torch.randn(8, 4), torch.randn(8, 4)), batch_size=4)
+
+    # llm_client=None → must use cached loop, NOT the mock stub.
+    result = st.smart_train(model, opt, loader, llm_client=None, **kwargs)
+    assert result.get("ran_cached") is True, (
+        "smart_train fell back to mock instead of using the cached compiled loop"
+    )
