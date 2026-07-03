@@ -83,7 +83,7 @@ class HellaSwagDataset(Dataset):
         self.split = split
         self.cache_dir = cache_dir
         self.streaming = streaming
-        self.limit = min(int(limit), 1024) if limit is not None else limit
+        self.limit = int(limit) if limit is not None else None
         
         # Set up cache path
         if cache_dir is None:
@@ -106,11 +106,13 @@ class HellaSwagDataset(Dataset):
             
             # Convert to list if not streaming and apply limit
             if streaming:
-                self.data = self.dataset if limit is None else self.dataset.take(limit)
+                self.data = self.dataset if self.limit is None else self.dataset.take(self.limit)
             else:
-                self.data = list(self.dataset) if limit is None else list(self.dataset.take(limit))
+                self.data = list(self.dataset)
                 if cache_dir:
                     self._save_to_cache()
+                if self.limit is not None:
+                    self.data = self.data[:self.limit]
                     
         except Exception as e:
             # Fallback to manual download if HuggingFace fails
