@@ -3,6 +3,7 @@ import os
 
 import torch
 import torch.nn as nn
+import torch.distributed as dist
 
 import tunalab.checkpointer as checkpointer
 from tunalab.distributed import is_main_process, cpu_barrier
@@ -10,7 +11,7 @@ from tunalab.distributed import is_main_process, cpu_barrier
 
 @torch.no_grad()
 def _eval_loss(model: nn.Module, loader) -> float:
-    """Helper to compute validation loss."""
+    """Helper to compute validation loss, averaged across all DDP ranks."""
     was_training = model.training
     model.eval()
     total, count = 0.0, 0
@@ -20,6 +21,16 @@ def _eval_loss(model: nn.Module, loader) -> float:
         count += 1
     if was_training:
         model.train()
+
+    # Average across ranks so every process selects "best" on the same number.
+    # Reduce summed loss and count, then divide once: (Σ total) / (Σ count).
+    # Tensor must be on CUDA — NCCL cannot reduce CPU tensors.
+    if dist.is_available() and dist.is_initialized():
+        device = next(model.parameters()).device if list(model.parameters()) else torch.device("cuda")
+        t = torch.tensor([total, float(count)], dtype=torch.float64, device=device)
+        dist.all_reduce(t, op=dist.ReduceOp.SUM)
+        return t[0].item() / max(t[1].item(), 1.0)
+
     return total / max(count, 1)
 
 
