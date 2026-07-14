@@ -98,7 +98,15 @@ def save_checkpoint(
         else:
             logger.warning(f"Object '{key}' has no .state_dict() method and will not be checkpointed")
 
-    torch.save(state, filepath)
+    # Atomic write: save to a temp file then rename, so a crash/preemption
+    # mid-write can never leave a truncated/corrupt checkpoint at ``filepath``.
+    # os.replace is atomic within a filesystem. This matters for resume-heavy /
+    # preemptible workflows where a periodically-overwritten latest.pt is the
+    # newest (and therefore preferred) checkpoint — a half-written one would
+    # otherwise abort resume.
+    tmp_path = filepath + ".tmp"
+    torch.save(state, tmp_path)
+    os.replace(tmp_path, filepath)
     logger.info(f"Checkpoint saved successfully: {filepath}")
     return filepath
 
